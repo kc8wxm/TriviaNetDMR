@@ -177,6 +177,249 @@ pub fn clean_markdown(input: &str) -> String {
     out.trim().to_string()
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum IssueLevel {
+    Error,
+    Warning,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ValidationIssue {
+    pub level: IssueLevel,
+    pub question_number: Option<usize>,
+    pub message: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct DeckValidation {
+    pub file_path: String,
+    pub filename: String,
+    pub title: String,
+    pub question_count: usize,
+    pub issues: Vec<ValidationIssue>,
+}
+
+impl DeckValidation {
+    pub fn is_valid(&self) -> bool {
+        !self.issues.iter().any(|i| i.level == IssueLevel::Error)
+    }
+
+    pub fn error_count(&self) -> usize {
+        self.issues
+            .iter()
+            .filter(|i| i.level == IssueLevel::Error)
+            .count()
+    }
+
+    pub fn warning_count(&self) -> usize {
+        self.issues
+            .iter()
+            .filter(|i| i.level == IssueLevel::Warning)
+            .count()
+    }
+}
+
+pub fn validate_deck_content(file_path: &str, content: &str) -> DeckValidation {
+    let filename = Path::new(file_path)
+        .file_name()
+        .and_then(|f| f.to_str())
+        .unwrap_or(file_path)
+        .to_string();
+
+    let topic = TriviaTopic::parse_markdown(content);
+    let mut issues = Vec::new();
+
+    if topic.questions.is_empty() {
+        issues.push(ValidationIssue {
+            level: IssueLevel::Error,
+            question_number: None,
+            message: "No trivia questions found (expected 'Question:' format)".to_string(),
+        });
+    }
+
+    if topic.title == "Trivia Net" && !content.contains('#') {
+        issues.push(ValidationIssue {
+            level: IssueLevel::Warning,
+            question_number: None,
+            message: "Topic title not explicitly defined with Markdown header (#)".to_string(),
+        });
+    }
+
+    let mut seen_numbers = std::collections::HashSet::new();
+    let mut expected_seq_num = 1;
+    let mut has_non_sequential = false;
+
+    for q in &topic.questions {
+        if seen_numbers.contains(&q.number) {
+            issues.push(ValidationIssue {
+                level: IssueLevel::Error,
+                question_number: Some(q.number),
+                message: format!("Duplicate question number: Q{}", q.number),
+            });
+        } else {
+            seen_numbers.insert(q.number);
+        }
+
+        if q.number != expected_seq_num && !has_non_sequential {
+            has_non_sequential = true;
+            issues.push(ValidationIssue {
+                level: IssueLevel::Warning,
+                question_number: Some(q.number),
+                message: format!(
+                    "Non-sequential question numbering (expected Q{}, found Q{})",
+                    expected_seq_num, q.number
+                ),
+            });
+        }
+        expected_seq_num += 1;
+
+        if q.question.trim().is_empty() {
+            issues.push(ValidationIssue {
+                level: IssueLevel::Error,
+                question_number: Some(q.number),
+                message: format!("Question {} prompt is empty", q.number),
+            });
+        } else if q.question.trim().len() < 5 {
+            issues.push(ValidationIssue {
+                level: IssueLevel::Warning,
+                question_number: Some(q.number),
+                message: format!("Question {} prompt is very short (< 5 characters)", q.number),
+            });
+        }
+
+        if q.answer.trim().is_empty() {
+            issues.push(ValidationIssue {
+                level: IssueLevel::Error,
+                question_number: Some(q.number),
+                message: format!("Question {} answer is missing or empty", q.number),
+            });
+        }
+
+        if let Some(ref fact) = q.fact {
+            if fact.trim().is_empty() {
+                issues.push(ValidationIssue {
+                    level: IssueLevel::Warning,
+                    question_number: Some(q.number),
+                    message: format!("Question {} Net Control fact is empty", q.number),
+                });
+            }
+        }
+    }
+
+    DeckValidation {
+        file_path: file_path.to_string(),
+        filename,
+        title: topic.title,
+        question_count: topic.questions.len(),
+        issues,
+    }
+}
+
+pub fn validate_deck<P: AsRef<Path>>(path: P) -> DeckValidation {
+    let p = path.as_ref();
+    let path_str = p.to_string_lossy().to_string();
+    let filename = p
+        .file_name()
+        .and_then(|f| f.to_str())
+        .unwrap_or(&path_str)
+        .to_string();
+
+    match fs::read_to_string(p) {
+        Ok(content) => validate_deck_content(&path_str, &content),
+        Err(err) => DeckValidation {
+            file_path: path_str,
+            filename,
+            title: "Unreadable File".to_string(),
+            question_count: 0,
+            issues: vec![ValidationIssue {
+                level: IssueLevel::Error,
+                question_number: None,
+                message: format!("Cannot read file: {}", err),
+            }],
+        },
+    }
+}
+
+pub fn scan_and_validate_directory<P: AsRef<Path>>(dir: P) -> Vec<DeckValidation> {
+    let mut results = Vec::new();
+    if let Ok(entries) = fs::read_dir(dir) {
+        let mut paths: Vec<_> = entries
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| {
+                p.extension()
+                    .and_then(|ext| ext.to_str())
+                    .map_or(false, |ext| ext.eq_ignore_ascii_case("md"))
+            })
+            .collect();
+        paths.sort();
+        for path in paths {
+            results.push(validate_deck(path));
+        }
+    }
+    results
+}
+
+pub fn find_all_deck_files() -> Vec<DeckValidation> {
+    let mut validations = Vec::new();
+    let mut seen_canonical = std::collections::HashSet::new();
+
+    let mut check_and_add = |p: &Path| {
+        if p.exists() {
+            if let Ok(canonical) = p.canonicalize() {
+                if seen_canonical.insert(canonical) {
+                    validations.push(validate_deck(p));
+                }
+            } else if seen_canonical.insert(p.to_path_buf()) {
+                validations.push(validate_deck(p));
+            }
+        }
+    };
+
+    // 1. Scan Topic/ directory
+    if Path::new("Topic").is_dir() {
+        if let Ok(entries) = fs::read_dir("Topic") {
+            let mut paths: Vec<_> = entries
+                .filter_map(|e| e.ok())
+                .map(|e| e.path())
+                .filter(|p| {
+                    p.extension()
+                        .and_then(|ext| ext.to_str())
+                        .map_or(false, |ext| ext.eq_ignore_ascii_case("md"))
+                })
+                .collect();
+            paths.sort();
+            for path in paths {
+                check_and_add(&path);
+            }
+        }
+    }
+
+    // 2. Scan current working directory for Questions*.md or Topic*.md
+    if let Ok(entries) = fs::read_dir(".") {
+        let mut paths: Vec<_> = entries
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| {
+                if let Some(file_name) = p.file_name().and_then(|f| f.to_str()) {
+                    let lower = file_name.to_lowercase();
+                    lower.ends_with(".md")
+                        && (lower.starts_with("question") || lower.starts_with("topic"))
+                } else {
+                    false
+                }
+            })
+            .collect();
+        paths.sort();
+        for path in paths {
+            check_and_add(&path);
+        }
+    }
+
+    validations
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -253,4 +496,48 @@ mod tests {
         assert_eq!(q10.number, 10);
         assert_eq!(q10.answer, "\"Land ho!\"");
     }
+
+    #[test]
+    fn test_validate_existing_decks() {
+        let val1 = validate_deck("Topic/Questions-1.md");
+        assert!(val1.is_valid());
+        assert_eq!(val1.question_count, 20);
+        assert_eq!(val1.error_count(), 0);
+
+        let val2 = validate_deck("Topic/Questions-2.md");
+        assert!(val2.is_valid());
+        assert_eq!(val2.question_count, 10);
+        assert_eq!(val2.error_count(), 0);
+    }
+
+    #[test]
+    fn test_validate_deck_errors_and_warnings() {
+        // Missing questions
+        let empty_val = validate_deck_content("empty.md", "# Test Topic\nSome random text");
+        assert!(!empty_val.is_valid());
+        assert_eq!(empty_val.error_count(), 1);
+
+        // Missing answer and duplicate question numbers
+        let broken = r#"
+# Broken Topic
+1. Question: What is the speed of light?
+Net Control Fact: It is very fast.
+
+1. Question: What is gravity?
+Answer: Attraction between masses.
+"#;
+        let broken_val = validate_deck_content("broken.md", broken);
+        assert!(!broken_val.is_valid());
+        assert!(broken_val.issues.iter().any(|i| i.message.contains("Duplicate question number")));
+        assert!(broken_val.issues.iter().any(|i| i.message.contains("answer is missing or empty")));
+    }
+
+    #[test]
+    fn test_find_all_deck_files() {
+        let decks = find_all_deck_files();
+        assert!(!decks.is_empty());
+        assert!(decks.iter().any(|d| d.filename == "Questions-1.md"));
+        assert!(decks.iter().any(|d| d.filename == "Questions-2.md"));
+    }
 }
+

@@ -31,7 +31,7 @@ impl Participant {
     }
 }
 
-use crate::trivia::{TriviaQuestion, TriviaTopic};
+use crate::trivia::{DeckValidation, TriviaQuestion, TriviaTopic};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ExportFormat {
@@ -48,6 +48,7 @@ pub enum InputMode {
     DeleteConfirm,
     ExportDialog { format: ExportFormat },
     FinalScores,
+    TopicPicker,
 }
 
 #[derive(Clone, Debug)]
@@ -65,6 +66,9 @@ pub struct App {
     pub status_message: Option<String>,
     pub api_status: String,
     pub trivia_topic: Option<TriviaTopic>,
+    pub current_topic_path: Option<String>,
+    pub available_decks: Vec<DeckValidation>,
+    pub topic_picker_index: usize,
     pub current_question_index: usize,
     pub show_answer: bool,
 }
@@ -89,6 +93,9 @@ impl App {
             status_message: None,
             api_status: String::from("Offline (Mock Mode)"),
             trivia_topic: None,
+            current_topic_path: None,
+            available_decks: Vec::new(),
+            topic_picker_index: 0,
             current_question_index: 0,
             show_answer: true,
         }
@@ -447,6 +454,103 @@ impl App {
         let serialized = serde_json::to_string_pretty(&export).map_err(std::io::Error::other)?;
         std::fs::write(filepath, serialized)?;
         Ok(())
+    }
+
+    /// Discovers all available trivia decks from Topic/ and working directories.
+    pub fn discover_decks(&mut self) {
+        self.available_decks = crate::trivia::find_all_deck_files();
+    }
+
+    /// Opens the topic picker modal with available decks populated.
+    pub fn open_topic_picker(&mut self) {
+        self.discover_decks();
+        if let Some(ref current) = self.current_topic_path {
+            if let Some(pos) = self.available_decks.iter().position(|d| {
+                d.file_path == *current
+                    || d.filename == *current
+                    || current.ends_with(&d.filename)
+            }) {
+                self.topic_picker_index = pos;
+            } else {
+                self.topic_picker_index = 0;
+            }
+        } else {
+            self.topic_picker_index = 0;
+        }
+        self.input_mode = InputMode::TopicPicker;
+    }
+
+    /// Selects the highlighted deck from the topic picker and loads it.
+    pub fn select_picked_topic(&mut self) -> Result<String, String> {
+        if self.available_decks.is_empty() {
+            self.input_mode = InputMode::Normal;
+            return Err("No trivia decks found in Topic/ or working directory".to_string());
+        }
+
+        let idx = self
+            .topic_picker_index
+            .min(self.available_decks.len().saturating_sub(1));
+        let deck = &self.available_decks[idx];
+        let path = deck.file_path.clone();
+
+        match TriviaTopic::load_from_file(&path) {
+            Ok(topic) => {
+                let count = topic.questions.len();
+                let title = topic.title.clone();
+                self.trivia_topic = Some(topic);
+                self.current_topic_path = Some(path);
+                if count > 0 {
+                    self.current_question_index =
+                        (self.round_number.saturating_sub(1)).min(count - 1);
+                } else {
+                    self.current_question_index = 0;
+                }
+                self.input_mode = InputMode::Normal;
+                Ok(format!(
+                    "Switched topic to '{}' ({} questions)",
+                    title, count
+                ))
+            }
+            Err(e) => Err(format!("Failed to load deck {}: {}", deck.filename, e)),
+        }
+    }
+
+    /// Hot-reloads the active trivia deck from disk without resetting net session or scores.
+    pub fn reload_current_topic(&mut self) -> Result<String, String> {
+        let path = match &self.current_topic_path {
+            Some(p) => p.clone(),
+            None => {
+                if std::path::Path::new("Topic/Questions.md").exists() {
+                    "Topic/Questions.md".to_string()
+                } else if std::path::Path::new("Topic/Questions-1.md").exists() {
+                    "Topic/Questions-1.md".to_string()
+                } else if std::path::Path::new("Questions.md").exists() {
+                    "Questions.md".to_string()
+                } else {
+                    return Err("No active deck file loaded to reload".to_string());
+                }
+            }
+        };
+
+        match TriviaTopic::load_from_file(&path) {
+            Ok(topic) => {
+                let count = topic.questions.len();
+                let title = topic.title.clone();
+                self.trivia_topic = Some(topic);
+                self.current_topic_path = Some(path);
+                if count > 0 {
+                    self.current_question_index =
+                        self.current_question_index.min(count - 1);
+                } else {
+                    self.current_question_index = 0;
+                }
+                Ok(format!(
+                    "Hot-reloaded deck: '{}' ({} questions)",
+                    title, count
+                ))
+            }
+            Err(e) => Err(format!("Failed to reload deck: {}", e)),
+        }
     }
 }
 
@@ -880,4 +984,37 @@ mod tests {
         assert_eq!(scoreboard[2].1.callsign, "W1AW");
         assert_eq!(scoreboard[2].1.total_score(), 3);
     }
+
+    #[test]
+    fn test_topic_discovery_and_selection() {
+        let mut app = App::new();
+        app.open_topic_picker();
+        assert_eq!(app.input_mode, InputMode::TopicPicker);
+        assert!(!app.available_decks.is_empty());
+
+        // Find index of Questions-2.md
+        if let Some(pos) = app.available_decks.iter().position(|d| d.filename == "Questions-2.md") {
+            app.topic_picker_index = pos;
+            let res = app.select_picked_topic();
+            assert!(res.is_ok());
+            assert_eq!(app.input_mode, InputMode::Normal);
+            assert_eq!(app.trivia_topic.as_ref().unwrap().questions.len(), 10);
+            assert_eq!(app.current_topic_path.as_deref(), Some(app.available_decks[pos].file_path.as_str()));
+        }
+    }
+
+    #[test]
+    fn test_hot_reload_topic() {
+        let mut app = App::new();
+        app.current_topic_path = Some("Topic/Questions-2.md".to_string());
+        app.round_number = 3;
+        app.current_question_index = 2;
+
+        let res = app.reload_current_topic();
+        assert!(res.is_ok());
+        assert!(app.trivia_topic.is_some());
+        assert_eq!(app.trivia_topic.as_ref().unwrap().questions.len(), 10);
+        assert_eq!(app.current_question_index, 2);
+    }
 }
+

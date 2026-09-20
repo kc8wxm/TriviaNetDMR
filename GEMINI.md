@@ -13,16 +13,19 @@ TriviaNetDMR is a modern, highly interactive, and visually polished Terminal Use
 - **Callsign Management:** Easily edit mistyped callsigns (`e`) with automatic QRZ re-lookup, or delete operators (`d`) from the active queue and roster with safe confirmation.
 - **Interactive Final Scoreboard & Leaderboard:** View full contest standings at any time (`f`) in an interactive leaderboard popup with podium ranks (🥇, 🥈, 🥉), full score breakdowns, and smooth scrolling for nets of any size.
 - **Contest Export (CSV & JSON):** Save contest results and final scoreboards at any time (`s`) to CSV spreadsheets or structured JSON data files, complete with ranks and participant statistics.
+- **In-App Topic & Deck Switcher:** Browse and switch question decks on the fly (`t`) directly within the TUI from `Topic/*.md` without restarting the application or losing state.
+- **Hot-Reload Decks:** Edit questions in an external editor during net prep and instantly hot-reload (`u`) from disk while preserving the participant queue, active round, and scores.
+- **CLI & In-App Deck Validator:** Built-in validator (`--check` / `-c`) that analyzes Markdown question decks for format errors, missing answers, empty prompts, and duplicate or non-sequential numbers.
 
 ---
 
 ## 🛠 Project Architecture
 The codebase is structured into five highly focused modules:
-1. `src/state.rs`: Holds the pure domain models (`Participant`, `App`, `InputMode`, `ExportFormat`), scoring mutations, queue rotation, participant edit/delete logic, export generators, and trivia question navigation. Contains unit tests for rotation offsets, scoring, editing, deletion, and exports.
-2. `src/trivia.rs`: Loads and parses Markdown question decks into structured topics, questions, answers, and Net Control facts, with robust Markdown syntax cleaning.
+1. `src/state.rs`: Holds the pure domain models (`Participant`, `App`, `InputMode`, `ExportFormat`), scoring mutations, queue rotation, participant edit/delete logic, export generators, trivia question navigation, deck discovery, topic picker switching, and hot-reloading. Contains unit tests for rotation offsets, scoring, editing, deletion, exports, and deck management.
+2. `src/trivia.rs`: Loads and parses Markdown question decks into structured topics, questions, answers, and Net Control facts, with robust Markdown syntax cleaning, deck validation diagnostics, and directory file scanners.
 3. `src/qrz.rs`: Features the asynchronous `QrzClient`. Manages session-cached authentication, XML response parsing using `roxmltree`, and the region-aware mock generator.
-4. `src/ui.rs`: Handles the layout rendering using `ratatui`. Draws the multi-column header (with round & question indicators), trivia question/answer banner, participant table, operator detail card, net summary stats (with status/error feedback), and modals for check-in, edit, delete, export, and clear.
-5. `src/main.rs`: Coordinates startup, CLI argument handling (e.g. specifying question decks), crossterm raw-mode initialization, event routing, background QRZ lookups, and graceful shutdown.
+4. `src/ui.rs`: Handles the layout rendering using `ratatui`. Draws the multi-column header (with round & question indicators), trivia question/answer banner, participant table, operator detail card, net summary stats (with status/error feedback), and modals for check-in, edit, delete, export, final scores, and topic deck picker.
+5. `src/main.rs`: Coordinates startup, CLI argument handling (e.g. `--check` validator mode or specifying question decks), crossterm raw-mode initialization, event routing, background QRZ lookups, and graceful shutdown.
 
 ---
 
@@ -78,6 +81,8 @@ The application features intuitive single-key controls:
 | `v` | **Deduct Bonus Point** | Deduct `1 pt` from the active operator's bonus score (for corrections). |
 | `r` | **Rotate Round** | Finishes the current round, increments round number, rotates queue, and advances question. |
 | `f` | **Show Final Scores** | Opens interactive final scoreboard and contest standings modal. Press `Esc`/`Enter` to close, `s` to export. |
+| `t` | **Browse & Switch Decks** | Opens the topic picker modal to choose and switch trivia decks (`Topic/*.md`). |
+| `u` | **Hot-Reload Deck** | Reloads current active trivia markdown deck from disk without losing scores. |
 | `a` | **Toggle Answer Visibility** | Toggles hiding/revealing the answer and Net Control fact. |
 | `[` or `←` | **Previous Question** | Manually moves back to the previous trivia question. |
 | `]` or `→` | **Next Question** | Manually advances to the next trivia question. |

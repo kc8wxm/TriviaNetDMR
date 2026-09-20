@@ -607,6 +607,20 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     control_spans.extend(vec![
         Span::styled(
+            " [t]",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" Decks "),
+        Span::styled(
+            " [u]",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" Reload "),
+        Span::styled(
             " [Backspace]",
             Style::default()
                 .fg(Color::Yellow)
@@ -1097,4 +1111,197 @@ pub fn draw(f: &mut Frame, app: &App) {
         let hint_p = Paragraph::new(Line::from(hint_spans));
         f.render_widget(hint_p, popup_chunks[2]);
     }
+
+    // ==========================================
+    // 7. TOPIC PICKER MODAL
+    // ==========================================
+    if let InputMode::TopicPicker = app.input_mode {
+        let popup_area = centered_rect(75, 55, size);
+        f.render_widget(Clear, popup_area);
+
+        let block = Block::default()
+            .title(" 📚 Select Trivia Deck ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::LightCyan));
+
+        let inner_layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(2), // Intro
+                Constraint::Min(5),    // Table
+                Constraint::Length(2), // Footer
+            ])
+            .margin(1)
+            .split(popup_area);
+
+        f.render_widget(block, popup_area);
+
+        let intro_p = Paragraph::new(Line::from(vec![
+            Span::styled(
+                " Browse and switch trivia decks in ",
+                Style::default().fg(Color::Gray),
+            ),
+            Span::styled(
+                "Topic/",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                " or active directory:",
+                Style::default().fg(Color::Gray),
+            ),
+        ]));
+        f.render_widget(intro_p, inner_layout[0]);
+
+        if app.available_decks.is_empty() {
+            let empty_p = Paragraph::new(vec![
+                Line::raw(""),
+                Line::from(Span::styled(
+                    "  ⚠️ No trivia deck files (*.md) found.",
+                    Style::default().fg(Color::LightRed),
+                )),
+                Line::from(Span::styled(
+                    "  Place Markdown files with questions in the Topic/ folder.",
+                    Style::default().fg(Color::Gray),
+                )),
+            ]);
+            f.render_widget(empty_p, inner_layout[1]);
+        } else {
+            let header_cells = [
+                " ",
+                "File",
+                "Topic Title",
+                "Questions",
+                "Validation Status",
+            ]
+            .iter()
+            .map(|h| {
+                Span::styled(
+                    *h,
+                    Style::default()
+                        .fg(Color::LightCyan)
+                        .add_modifier(Modifier::BOLD),
+                )
+            });
+            let header_row = Row::new(header_cells).height(1).bottom_margin(1);
+
+            let mut rows = Vec::new();
+            for (idx, deck) in app.available_decks.iter().enumerate() {
+                let is_selected = idx == app.topic_picker_index;
+                let is_active_deck = app.current_topic_path.as_ref().map_or(false, |p| {
+                    p == &deck.file_path || p == &deck.filename || p.ends_with(&deck.filename)
+                });
+
+                let cursor_icon = if is_selected { " ▶ " } else { "   " };
+
+                let (status_text, status_style) = if deck.is_valid() && deck.issues.is_empty() {
+                    ("✔ Valid (clean)", Style::default().fg(Color::LightGreen))
+                } else if deck.is_valid() {
+                    (
+                        "✔ Valid (warnings)",
+                        Style::default().fg(Color::LightYellow),
+                    )
+                } else {
+                    (
+                        "✘ Invalid (errors)",
+                        Style::default()
+                            .fg(Color::LightRed)
+                            .add_modifier(Modifier::BOLD),
+                    )
+                };
+
+                let row_style = if is_selected {
+                    Style::default()
+                        .bg(Color::Rgb(25, 45, 50))
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default()
+                };
+
+                let title_display = if deck.title.len() > 30 {
+                    format!("{}...", &deck.title[..27])
+                } else {
+                    deck.title.clone()
+                };
+
+                let active_suffix = if is_active_deck { " [ACTIVE]" } else { "" };
+                let full_status = format!("{}{}", status_text, active_suffix);
+
+                let row_cells = vec![
+                    Span::styled(
+                        cursor_icon,
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        format!("{:<18}", deck.filename),
+                        Style::default().fg(Color::White),
+                    ),
+                    Span::styled(
+                        format!("{:<30}", title_display),
+                        Style::default().fg(Color::LightCyan),
+                    ),
+                    Span::styled(
+                        format!(" {:^8} ", format!("{} Qs", deck.question_count)),
+                        Style::default().fg(Color::White),
+                    ),
+                    Span::styled(
+                        full_status,
+                        if is_active_deck && deck.is_valid() {
+                            Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD)
+                        } else {
+                            status_style
+                        },
+                    ),
+                ];
+
+                let row = Row::new(row_cells).style(row_style).height(1);
+                rows.push(row);
+            }
+
+            let table = Table::new(
+                rows,
+                [
+                    Constraint::Length(4),  // Cursor
+                    Constraint::Length(19), // File
+                    Constraint::Min(25),    // Topic Title
+                    Constraint::Length(10), // Questions
+                    Constraint::Length(26), // Status & Active
+                ],
+            )
+            .header(header_row);
+
+            f.render_widget(table, inner_layout[1]);
+        }
+
+        // Footer controls hint
+        let footer_spans = vec![
+            Span::styled(
+                " [↑/↓/j/k]",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" Navigate   "),
+            Span::styled(
+                " [Enter]",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" Switch Deck   "),
+            Span::styled(
+                " [Esc/q]",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" Cancel "),
+        ];
+        let footer_p = Paragraph::new(Line::from(footer_spans));
+        f.render_widget(footer_p, inner_layout[2]);
+    }
 }
+
