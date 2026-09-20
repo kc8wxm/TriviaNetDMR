@@ -1,0 +1,92 @@
+#+TITLE: TriviaNetDMR — Project Commonplace Book & Knowledge Base
+#+AUTHOR: Steve Sutton (KC8WXM)
+#+DATE: 2026-09-20
+#+STARTUP: showall
+#+OPTIONS: toc:2 num:t
+#+TAGS: { ARCHITECTURE(a) OPERATIONS(o) TRIVIA(t) RELEASE(r) ROADMAP(m) }
+
+* Welcome to the TriviaNetDMR Commonplace Book
+
+Welcome to the central knowledge repository, engineering journal, and operator's
+companion for *TriviaNetDMR*. This commonplace book captures design decisions,
+system architectures, Net Control Station (NCS) operating procedures, historical
+logs, and future ideas for running amateur radio trivia nets.
+
+** Mission Statement
+Amateur radio trivia nets bring operators together across DMR talkgroups and
+analog repeaters for technical camaraderie, knowledge sharing, and friendly
+competition. Traditional net logging using paper or general-purpose loggers
+creates immense cognitive load for the Net Control Station (NCS):
+- Manual callbook lookups slow down the net.
+- Fixed turn orders disadvantage operators who answer late in the queue.
+- Scoring arithmetic distracts from managing the airwaves and repeater timeouts.
+
+*TriviaNetDMR* was engineered in Rust to eliminate this friction entirely.
+It delivers a distraction-free, keyboard-driven Terminal User Interface (TUI)
+with automated QRZ.com lookups, automatic fair queue rotation, markdown question
+prompters, and instant contest exports.
+
+** Commonplace Navigation Hub
+
+This journal is organized into focused notebooks:
+
+| Section | Notebook File | Description |
+|---+---+---|
+| 📐 [[file:architecture.org][Architecture & Design]] | =architecture.org= | Domain models, Ratatui layout, async Tokio pipeline, XML parsing, and ADRs. |
+| 🎙️ [[file:operations.org][Operations & Runbook]] | =operations.org= | Step-by-step NCS operational playbook, on-air scripts, and contest guidelines. |
+| 📜 [[file:dev_log.org][Developer Chronicle]] | =dev_log.org= | Dated engineering journal entries, release milestones (v0.1.0 → v0.1.2), and bug logs. |
+| 📚 [[file:deck_authoring.org][Trivia Curation Guide]] | =deck_authoring.org= | Markdown deck formatting standards, syntax rules, authoring tips, and CLI validator. |
+| 💡 [[file:ideas_roadmap.org][Ideas & Future Roadmap]] | =ideas_roadmap.org= | Scratchpad for future feature proposals, OpenTDB integrations, and audio cues. |
+
+** At a Glance: Master Keyboard Shortcut Matrix
+
+The entire application is controlled via intuitive single-key shortcuts:
+
+| Key | Category | Action | Operational Impact |
+|---+---+---+---|
+| =c= | Roster | Check-in Operator | Opens modal to enter callsign; triggers async QRZ lookup |
+| =e= | Roster | Edit Callsign | Modifies active callsign with duplicate check and re-queries QRZ |
+| =d= | Roster | Delete Operator | Removes operator from session and queue with confirmation |
+| =n= / =Enter= / =↓= | Queue | Next Turn | Advances active turn indicator to the next operator in queue |
+| =p= / =↑= | Queue | Previous Turn | Rewinds active turn indicator for score corrections |
+| =r= | Queue | Rotate Round | Finishes round, increments round number, shifts queue, advances question |
+| =y= | Scoring | Award Trivia (+1 pt) | Adds 1 point to active operator's trivia score |
+| =x= | Scoring | Deduct Trivia (-1 pt) | Deducts 1 point from active operator's trivia score |
+| =b= | Scoring | Award Bonus (+1 pt) | Adds 1 point to active operator's bonus score |
+| =v= | Scoring | Deduct Bonus (-1 pt) | Deducts 1 point from active operator's bonus score |
+| =a= | Trivia | Toggle Answer Visibility | Reveals/hides canonical answer and Net Control background fact |
+| =[= / =←= | Trivia | Previous Question | Manually navigates back to previous question in deck |
+| =]= / =→= | Trivia | Next Question | Manually advances to next question in deck |
+| =t= | Trivia | Browse & Switch Decks | Opens modal scanner listing all =Topic/*.md= decks with validation status |
+| =u= | Trivia | Hot-Reload Deck | Re-reads active Markdown deck from disk without losing net scores |
+| =f= | Contest | Final Scoreboard | Interactive leaderboard modal with podium ranks (🥇, 🥈, 🥉) and scrolling |
+| =s= | Contest | Export Contest | Generates RFC 4180 CSV spreadsheet or structured JSON results |
+| =Backspace= / =k= | Session | Clear Session Log | Resets active roster, queue, and scores with confirmation prompt |
+| =?= / =h= / =F1= | System | Help Menu | Pops up interactive keyboard shortcut and command reference modal |
+| =q= / =Esc= | System | Quit / Close | Exits active modal, or shuts down TUI and prints final scores |
+
+** Quick Start Commands
+
+#+BEGIN_SRC bash
+  # Compile and launch the release dashboard
+  cargo run --release
+
+  # Run the full automated test suite (27 unit tests)
+  cargo test
+
+  # Pre-flight validate all question decks before a net
+  cargo run -- --check Topic/
+
+  # Launch with a specific question deck
+  cargo run --release -- Topic/Questions-2.md
+#+END_SRC
+
+** Environment & Toolchain
+
+- *Current Release:* v0.1.2
+- *Language:* Rust (2024 Edition)
+- *TUI Framework:* [[https://github.com/ratatui-org/ratatui][Ratatui v0.30.2]] on [[https://github.com/crossterm-rs/crossterm][Crossterm v0.29.0]]
+- *Async Runtime:* [[https://tokio.rs][Tokio v1.53.1]] (full multi-threaded runtime)
+- *XML Callbook Engine:* [[https://github.com/RazrFalcon/roxmltree][roxmltree v0.21.1]]
+- *HTTP Client:* [[https://github.com/seanmonstar/reqwest][reqwest v0.13.5]]
+- *Branching Model:* Git-Flow (=master=, =develop=, =feature/*=, =release/*=)

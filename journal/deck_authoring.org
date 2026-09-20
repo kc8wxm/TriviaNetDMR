@@ -1,0 +1,136 @@
+#+TITLE: TriviaNetDMR — Trivia Deck Authoring & Validation Guide
+#+AUTHOR: Steve Sutton (KC8WXM)
+#+DATE: 2026-09-20
+#+STARTUP: showall
+#+OPTIONS: toc:2 num:t
+#+TAGS: { TRIVIA(t) MARKDOWN(m) VALIDATOR(v) TEMPLATES(p) }
+
+* Anatomy of a TriviaNetDMR Question Deck
+
+TriviaNetDMR parses question decks directly from standard Markdown (=.md=) files
+located in the =Topic/= directory (or the root project directory). 
+
+** Structural Rules
+A well-formed question deck follows this clean, human-readable structure:
+
+#+BEGIN_SRC markdown
+  ### **10 Trivia Questions & Answers: Astronomy & Space Science**
+
+  1. **Question:** What is the closest planet to the Sun?
+     * **Answer:** Mercury.
+     * **Net Control Fact:** Mercury has virtually no atmosphere and experiences extreme temperature swings from -290°F to 800°F.
+
+  2. **Question:** Which Apollo mission was the first to land humans on the Moon?
+     * **Answer:** Apollo 11.
+     * **Net Control Fact:** Neil Armstrong and Buzz Aldrin landed the Lunar Module Eagle on July 20, 1969.
+#+END_SRC
+
+** Syntax Elements Breakdown
+
+1. *Topic Header (=#=, =##=, or =###=):*
+   - Defines the overall theme shown on the top card and in contest exports.
+   - If colon-separated (e.g. =10 Trivia Questions: Theme Name=), the parser
+     intelligently strips numeric prefixes and extracts =Theme Name=.
+2. *Question Prompt:*
+   - Marked with an ordered number followed by =Question:= (e.g., =1. **Question:**= or =Q1:=).
+   - Case-insensitive.
+   - Supports multi-line questions; continuation lines are automatically appended.
+3. *Canonical Answer:*
+   - Marked with =* **Answer:**= or =Answer:=.
+   - Case-insensitive.
+   - Provides Net Control with the exact answer or acceptable variants (e.g., =Matey (or Shipmate)=).
+4. *Net Control Fact (Optional but Recommended):*
+   - Marked with =* **Net Control Fact:**= or =Fact:=.
+   - Provides interesting trivia context that Net Control can read over the air
+     while waiting for the repeater tail to drop.
+
+* Formatting Nuances & Markdown Cleaning
+
+The built-in cleaner (=clean_markdown= in =src/trivia.rs=) automatically handles:
+- Stripping bold markers (=**=) and italics (=_=).
+- Stripping code backticks (=`=).
+- Un-escaping punctuation backslashes (e.g., converting =\"Land ho\\!\"= to =\"Land ho!\"=, and =1995\\.= to =1995.=).
+- Preserving parentheses for acceptable answer alternatives.
+
+* Using the Built-In Deck Validator
+
+Before hosting a live net, always validate your question decks using the CLI
+validator mode. It runs instantly without opening the full TUI:
+
+#+BEGIN_SRC bash
+  # Validate all decks in the Topic/ folder
+  ./TriviaNetDMR --check Topic/
+
+  # Validate a specific deck file
+  ./TriviaNetDMR --check Topic/Questions-2.md
+
+  # Short flag alias
+  ./TriviaNetDMR -c
+#+END_SRC
+
+** Diagnostic Output Example
+#+BEGIN_SRC text
+  🔍 TriviaNetDMR v0.1.2 Deck Validator
+
+  Scanning: Topic/
+  --------------------------------------------------
+  📄 File:      Topic/SpaceScience.md
+     Topic:     "Astronomy & Space Science"
+     Questions: 10
+     ✔ Status:    PERFECT (No issues detected)
+
+  --------------------------------------------------
+  📄 File:      Topic/BrokenDeck.md
+     Topic:     "Broken Deck"
+     Questions: 3
+     ✘ Status:    INVALID (2 errors, 1 warning)
+       ✘ ERROR   [Q2]: Question 2 answer is missing or empty
+       ✘ ERROR   [Q3]: Duplicate question number: Q3
+       ⚠ WARNING [Q3]: Question 3 Net Control fact is empty
+
+  ==================================================
+  Summary: 2 deck(s) scanned | 1 valid | 2 error(s) | 1 warning(s)
+#+END_SRC
+
+* Common Authoring Pitfalls & Solutions
+
+| Issue | Symptom | Diagnostic Level | Solution |
+|---+---+---+---|
+| Missing Answer Line | Question loaded with empty answer | ✘ ERROR | Add =* **Answer:** <text>= below the prompt. |
+| Duplicate Numbers | Two questions labeled =1. Question:= | ✘ ERROR | Renumber questions sequentially (1, 2, 3...). |
+| Empty Question Prompt | Question text is blank or missing | ✘ ERROR | Ensure prompt text follows =Question:=. |
+| Missing Title Header | Topic defaults to "Trivia Net" | ⚠ WARNING | Add a topmost header line like =### **Title**=. |
+| Empty Net Control Fact | Fact field present with no text | ⚠ WARNING | Either provide fact text or remove the fact line. |
+| Non-Sequential Order | Gaps in numbering (e.g. 1, 2, 4) | ⚠ WARNING | Check for accidentally deleted questions. |
+
+* Ready-to-Use Trivia Deck Templates
+
+** Template A: Amateur Radio History & Theory
+#+BEGIN_SRC markdown
+  ### **10 Trivia Questions & Answers: Amateur Radio History**
+
+  1. **Question:** What international Morse code distress signal replaced CQD in 1908?
+     * **Answer:** SOS (... --- ...).
+     * **Net Control Fact:** SOS was chosen not because it stood for "Save Our Souls", but because it is a distinct, easily recognized rhythmic continuous sequence.
+
+  2. **Question:** What was the callsign of the famous experimental radio station operated by Reginald Fessenden in Massachusetts?
+     * **Answer:** 1BO (later W1XAV / Brant Rock).
+     * **Net Control Fact:** On Christmas Eve 1906, Fessenden transmitted what is widely considered the first voice radio broadcast.
+
+  3. **Question:** What amateur radio frequency band is commonly referred to as the "Gentleman's Band"?
+     * **Answer:** 160 Meters (Top Band).
+     * **Net Control Fact:** 160m spans 1.8 to 2.0 MHz and requires massive antennas due to its ~160 meter wavelength.
+#+END_SRC
+
+** Template B: General Science & Technology
+#+BEGIN_SRC markdown
+  ### **10 Trivia Questions & Answers: Computing & Inventions**
+
+  1. **Question:** What was the name of the first electronic general-purpose digital computer, completed in 1945?
+     * **Answer:** ENIAC (Electronic Numerical Integrator and Computer).
+     * **Net Control Fact:** ENIAC occupied 1,800 square feet and contained more than 17,000 vacuum tubes.
+
+  2. **Question:** What popular wireless communication standard was named after a 10th-century Scandinavian king?
+     * **Answer:** Bluetooth (King Harald Bluetooth).
+     * **Net Control Fact:** Harald Bluetooth was renowned for uniting Scandinavian tribes, just as Bluetooth unites PCs and cellular devices.
+#+END_SRC

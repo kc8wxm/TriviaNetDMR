@@ -1,0 +1,173 @@
+#+TITLE: TriviaNetDMR — System Architecture & Technical Design
+#+AUTHOR: Steve Sutton (KC8WXM)
+#+DATE: 2026-09-20
+#+STARTUP: showall
+#+OPTIONS: toc:2 num:t
+#+TAGS: { ARCHITECTURE(a) STATE(s) TOKIO(t) UI(u) ADR(d) }
+
+* Architectural Overview
+
+TriviaNetDMR is structured as an asynchronous, event-driven Terminal User Interface
+application in Rust. The design separates pure domain state and business logic from
+asynchronous I/O operations and visual terminal rendering.
+
+#+BEGIN_SRC text
+                   +---------------------------------------+
+                   |         Terminal Event Loop           |
+                   |   (Crossterm Key Events & Ticks)      |
+                   +-------------------+-------------------+
+                                       |
+                                       v
+                             +-------------------+
+                             |  Tokio MPSC Queue | <----+ (Async QRZ Lookups)
+                             +---------+---------+      |
+                                       |                |
+                                       v                |
+                           +-----------------------+    |
+                           |   Main Event Dispatch |----+
+                           |    (src/main.rs)      |
+                           +-----------+-----------+
+                                       |
+                      +----------------+----------------+
+                      |                                 |
+                      v                                 v
+           +--------------------+             +--------------------+
+           |  App State Model   |             |   Ratatui Renderer |
+           |   (src/state.rs)   | ----------> |    (src/ui.rs)     |
+           +--------------------+             +--------------------+
+                      ^                                 |
+                      |                                 v
+           +--------------------+             +--------------------+
+           | Trivia Deck Parser |             |  ANSI Terminal Out |
+           |  (src/trivia.rs)   |             | (Alternate Screen) |
+           +--------------------+             +--------------------+
+#+END_SRC
+
+* Module Architecture Breakdown
+
+** 1. Domain State Machine (=src/state.rs=)
+The state module is the architectural heart of the application. It has zero
+dependencies on rendering frameworks, making it 100% deterministic and unit-testable.
+
+*** Key Structures
+- =Participant=: Represents a single amateur radio operator.
+  #+BEGIN_SRC rust
+    pub struct Participant {
+        pub id: usize,
+        pub callsign: String,
+        pub name: Option<String>,
+        pub location: Option<String>,
+        pub points_checkin: u32,
+        pub points_trivia: u32,
+        pub points_bonus: u32,
+        pub qrz_fetched: bool,
+        pub notes: String,
+    }
+  #+END_SRC
+- =App=: The overarching application domain model holding the active roster,
+  rotation queue, input buffers, round state, and deck summaries.
+- =InputMode=: The modal state machine controlling user input context:
+  - =Normal=: Standard navigation and turn control.
+  - =AddCheckin=: Callsign entry modal.
+  - =EditCallsign=: Active operator callsign correction modal.
+  - =DeleteConfirm=: Operator removal safety dialog.
+  - =ExportDialog=: CSV/JSON filename and format picker.
+  - =FinalScores=: Full contest scoreboard viewer.
+  - =TopicPicker=: Visual deck browser and selector.
+  - =HelpMenu=: Interactive keyboard command reference.
+  - =ClearConfirm=: Reset session confirmation dialog.
+
+*** Fair Queue Rotation Algorithm
+A core innovation of TriviaNetDMR is ensuring every operator has a fair chance
+to answer first across rounds. The queue rotates deterministically at each round boundary:
+- =round_number=: Starts at 1.
+- =rotate_queue()=:
+  #+BEGIN_SRC rust
+    if self.participants.len() > 1 {
+        let first = self.queue.remove(0);
+        self.queue.push(first);
+        self.current_queue_index = 0;
+    }
+  #+END_SRC
+- Late check-ins added during later rounds are placed at the end of the active queue,
+  preserving round order without penalizing existing participants.
+
+** 2. Asynchronous QRZ.com Client (=src/qrz.rs=)
+Amateur radio callbook lookups are network-bound. Freezing the UI while waiting for
+an HTTP response is unacceptable during a fast-paced net.
+
+*** Design Features
+- *Session Key Caching:* Authenticates against the QRZ XML API (`https://xmldata.qrz.com/xml/current/`),
+  extracts the session key via =roxmltree=, and reuses it across lookups.
+- *Region-Aware Offline Mock Mode:* When credentials are not supplied, the client
+  automatically activates a procedural profile generator that parses US call districts (1–0)
+  and international prefixes (=VE= Canada, =G= Great Britain, =DL= Germany, =JA= Japan, =F= France)
+  to generate geographically realistic operator names and QTH locations.
+- *Tokio Spawn Pipeline:* Lookups run inside detached Tokio tasks and report results back
+  to the main event loop over an asynchronous =mpsc::channel=.
+
+** 3. Trivia Deck Engine & Diagnostics (=src/trivia.rs=)
+Loads human-readable Markdown decks from disk and provides diagnostics.
+
+*** Parser Pipeline
+1. Extracts topic title from the topmost Markdown header (=#=).
+2. Parses question prompts using case-insensitive search for =question:= or digit headers.
+3. Parses answers via =answer:= line markers.
+4. Parses Net Control facts via =net control fact:= or =fact:= markers.
+5. Cleans Markdown formatting (=**=, =_=, =\=, and punctuation escapes) into pristine terminal text.
+
+*** Deck Validator Engine
+The =DeckValidation= diagnostic engine analyzes question files against several quality rules:
+- *Error Checks:* Zero questions found, missing question prompt, missing canonical answer, duplicate question numbers.
+- *Warning Checks:* Missing Markdown title, unusually short prompts (<5 chars), empty Net Control facts, non-sequential question numbers.
+
+** 4. Terminal UI Layout Engine (=src/ui.rs=)
+Renders a modern, high-information-density dashboard using Ratatui.
+
+*** Grid Hierarchy
+- *Top Header (Height 3):* Application badge with compile-time version pill (=env!("CARGO_PKG_VERSION")=), Active Round & Question indicator, and QRZ Live/Mock status.
+- *Trivia Card (Height 7):* Active question prompt, canonical answer (with toggle =a=), and Net Control fact.
+- *Body (Dynamic split):*
+  - *Left (60% width):* Participant table showing active turn cursor (=▶=), callsign, name, and live point tallies.
+  - *Right (40% width):* Active Operator QRZ Profile Card and Net Summary metrics.
+- *Footer (Height 3):* Context-sensitive keyboard shortcut reference bar.
+- *Floating Popups:* Modals rendered via a centered bounding-box calculation with =Clear= widget backgrounds.
+
+** 5. Runtime & Event Coordination (=src/main.rs=)
+Coordinates the execution lifecycle:
+1. Intercepts CLI flags (e.g. =--check= / =-c= validator mode) before terminal raw mode.
+2. Initializes Crossterm raw mode and alternate screen buffer.
+3. Spawns Tokio channel receivers for keystroke events and background QRZ results.
+4. Auto-saves state to =trivia_log.json= on every state mutation and on graceful shutdown.
+5. Loads previous session state from =trivia_log.json= with fault-tolerant Serde defaults.
+6. Handles graceful shutdown: restores raw terminal mode and prints the final contest standings table to stdout.
+
+* Architectural Decision Records (ADRs)
+
+** ADR-001: Decoupling Pure State from Ratatui Rendering
+- *Context:* TUI applications often intertwine terminal widget logic with data mutations, making automated unit testing difficult.
+- *Decision:* Maintain =src/state.rs= as a pure Rust domain model without any imports of =ratatui= or =crossterm=.
+- *Consequences:* Allowed writing 27 comprehensive unit tests covering queue rotation, score calculations, callsign editing/deletions, empty/default JSON resilience, and JSON/CSV exports that execute in under 20 milliseconds without needing a terminal.
+
+** ADR-002: Asynchronous Channels for Callbook Lookups
+- *Context:* QRZ lookups take between 150ms to 2000ms depending on internet latency.
+- *Decision:* Checking in an operator immediately appends them to the queue with a placeholder state (=qrz_fetched = false=) and dispatches a background task. An =AppEvent::QrzResult= message updates the operator state once resolved.
+- *Consequences:* Net Control can continue checking in operators, awarding points, or turning pages with zero UI stutter.
+
+** ADR-003: Plaintext Markdown Decks over Databases
+- *Context:* Question decks could have been stored in SQLite, TOML, or JSON.
+- *Decision:* Use standard Markdown files in =Topic/*.md=.
+- *Consequences:* Ham radio operators can write and edit trivia decks in any standard text editor (Notepad, VS Code, Obsidian) without technical barriers. Enabled live hot-reloading (=u=) during net preparation.
+
+** ADR-004: Standardized Git-Flow Release Management
+- *Context:* Rapid feature development required a disciplined workflow to prevent unfinished features from breaking master production builds.
+- *Decision:* Adopt Git-Flow with =master= (production releases), =develop= (active integration), =feature/*= branches, and =release/*= branches with automated GitHub Actions CI/CD.
+- *Consequences:* Clean, auditable release history with automatic multi-platform binary compilation on every tag.
+
+** ADR-005: Resilient Session State Persistence & Clean-Slate Defaults
+- *Context:* Automatic session loading must not fail when files are blank, empty, or when new schema fields are introduced across releases. Furthermore, newly cloned repositories must start cleanly without loading historical test sessions.
+- *Decision:* 
+  1. Model =AppStateDump= with explicit Serde default fallback values (=#[serde(default)]= and =default_round_number() = 1=).
+  2. Implement an early return for 0-byte or whitespace-only files in =App::load_from_file=.
+  3. Commit a clean, empty template =trivia_log.json= representing a fresh Round 1 session with 0 participants.
+- *Consequences:* Flawless first-run experience out of the box, safe backward compatibility across releases, and zero crashes on missing JSON keys.

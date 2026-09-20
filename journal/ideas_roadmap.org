@@ -1,0 +1,82 @@
+#+TITLE: TriviaNetDMR — Ideas, Scratchpad & Future Roadmap
+#+AUTHOR: Steve Sutton (KC8WXM)
+#+DATE: 2026-09-20
+#+STARTUP: showall
+#+OPTIONS: toc:2 num:t
+#+TAGS: { ROADMAP(m) IDEAS(i) RESEARCH(r) RFC(c) }
+
+* Vision & Evolution Roadmap
+
+TriviaNetDMR has evolved from a simple check-in logger into a full Net Control
+companion workstation. This notebook serves as an open scratchpad for brainstorming,
+RFCs (Requests for Comments), and exploratory engineering spikes.
+
+* Prospective Feature Roadmap
+
+** Priority 1: Multi-Net Historical Roster & Statistics
+- *Concept:* Track participant attendance and all-time scores across multiple weekly nets.
+- *Implementation Ideas:*
+  - Maintain a persistent SQLite database or appending JSON history (`~/.trivianet/history.db`).
+  - Automatically display an operator's all-time attendance and wins when they check in
+    (e.g., =KE8WNV (14 nets, 2 wins)=).
+  - Add an all-time leaderboard view alongside the single-net contest standings.
+
+** Priority 2: Live Web Broadcast & Club Dashboard
+- *Concept:* Allow club members listening on scanners or DMR hotspots to view the live
+  scoreboard in their web browsers without running the terminal app.
+- *Implementation Ideas:*
+  - Embed a lightweight Tokio-based HTTP/WebSocket server (using =axum= or =warp=).
+  - Serve a responsive single-page HTML/CSS dashboard with live WebSocket score updates.
+  - Net Control can toggle web broadcasting with a single key or flag (=--serve= / =-s=).
+  - Discord Webhook integration: automatically post podium winners to the club Discord
+    server upon net completion!
+
+** Priority 3: Open Trivia Database (OpenTDB) Dynamic Generator
+- *Concept:* When Net Control doesn't have time to prepare a markdown deck before the net,
+  automatically fetch 10–20 fresh questions from the free OpenTDB API.
+- *API Endpoint:* =https://opentdb.com/api.php?amount=10&type=multiple=
+- *Workflow:*
+  1. Net Control selects =Generate from Web= in the topic picker.
+  2. Choose category (e.g., Science & Nature, History, Geography, General Knowledge).
+  3. App fetches and writes a clean Markdown deck into =Topic/Web-Generated-[Date].md=.
+  4. Automatically loads and activates the newly minted deck.
+
+** Priority 4: Audio Cues & Courtesy Beep Synthesizer
+- *Concept:* Digital radio nets rely heavily on timing and audio discipline. Subtle,
+  optional terminal audio beeps or sound card audio cues can assist Net Control.
+- *Candidate Sounds:*
+  - Soft chime when a background QRZ lookup successfully completes.
+  - DMR "talk permit" style triple-beep when a round rotates.
+  - Subtle timer tick or bell if an operator's turn exceeds 45 seconds (preventing repeater timeouts).
+- *Tech Stack:* =rodio= or =kira= cross-platform lightweight audio libraries in Rust.
+
+** Priority 5: Rig Control Integration via Hamlib (=rigctld=)
+- *Concept:* Connect to a local radio over Hamlib TCP (=localhost:4532=).
+- *Features:*
+  - Header pane displays active VFO frequency (e.g. =444.150 MHz DMR CC1 TS2=) and power level.
+  - Detect PTT / RF carrier presence to visually indicate when Net Control is transmitting.
+
+* Technical RFCs & Design Questions
+
+** RFC-101: Question Difficulty Weighting
+- *Question:* Should different trivia questions carry different point values?
+- *Current Model:* Flat 1 pt for correct answer, 1 pt for bonus.
+- *Proposal:* Allow Markdown questions to specify difficulty points in the prompt header:
+  #+BEGIN_SRC markdown
+    1. **Question (2 pts):** What is the frequency range of the 70cm band?
+  #+END_SRC
+- *Pros:* Enhances strategic contest depth for advanced rounds.
+- *Cons:* Adds cognitive burden to Net Control during fast-paced voice nets. Simple 1pt + bonus is currently preferred.
+
+** RFC-102: QRZ XML Session Token Expiration Handling
+- *Investigation:* QRZ XML session keys typically remain valid for 24 hours or until IP changes.
+- *Current Logic:* Session keys are cached indefinitely in memory during a single application run.
+- *Enhancement:* Detect error code `<Key>Error: Session Timeout</Key>` in XML response and
+  automatically trigger transparent re-authentication without dropping the lookup task.
+
+* Scratchpad & Brainstorming Notes
+
+- [ ] /Idea:/ Export to ADIF (Amateur Data Interchange Format) for operators who log net check-ins into Logbook of the World (LoTW) or QRZ Logbook.
+- [ ] /Idea:/ Color themes for the dashboard (e.g. Amber phosphor retro, Matrix green, High-contrast monochrome for outdoor sunlight field operations).
+- [ ] /Idea:/ Support multiple simultaneous Net Control stations operating as primary NCS and logger over local LAN.
+- [ ] /Idea:/ Auto-backup session snapshots (=trivia_log.backup-[timestamp].json=) on session reset or round completion.
