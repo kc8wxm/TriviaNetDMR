@@ -611,7 +611,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 6. Print Final Scoreboard
     if !app.participants.is_empty() {
         println!("\n=========================================================");
-        println!("             🏆 TriviaNetDMR Final Scores 🏆");
+        println!("          🏆 TriviaNetDMR v{} Final Scores 🏆", env!("CARGO_PKG_VERSION"));
         println!("=========================================================");
         println!(
             "{:<4} {:<10} {:<25} {:<6}",
@@ -640,7 +640,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Standalone CLI deck validator mode (--check / --validate / -c)
 fn run_validator(target: Option<&str>) -> i32 {
-    println!("🔍 TriviaNetDMR Deck Validator\n");
+    println!("🔍 TriviaNetDMR v{} Deck Validator\n", env!("CARGO_PKG_VERSION"));
 
     let validations = match target {
         Some(path) => {

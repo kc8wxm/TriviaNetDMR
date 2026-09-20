@@ -74,7 +74,13 @@ pub fn draw(f: &mut Frame, app: &App) {
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled("Net Control Companion", Style::default().fg(Color::Gray)),
+        Span::styled(
+            format!("v{} ", env!("CARGO_PKG_VERSION")),
+            Style::default()
+                .fg(Color::LightGreen)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled("• Net Control Companion", Style::default().fg(Color::Gray)),
     ]))
     .block(
         Block::default()
@@ -1337,7 +1343,7 @@ pub fn draw(f: &mut Frame, app: &App) {
 
         let subtitle_p = Paragraph::new(Line::from(vec![
             Span::styled(
-                "TriviaNetDMR Quick Reference — ",
+                format!("TriviaNetDMR v{} Quick Reference — ", env!("CARGO_PKG_VERSION")),
                 Style::default()
                     .fg(Color::LightCyan)
                     .add_modifier(Modifier::BOLD),
