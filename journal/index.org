@@ -34,7 +34,7 @@ This journal is organized into focused notebooks:
 |---+---+---|
 | 📐 [[file:architecture.org][Architecture & Design]] | =architecture.org= | Domain models, Ratatui layout, async Tokio pipeline, XML parsing, and ADRs. |
 | 🎙️ [[file:operations.org][Operations & Runbook]] | =operations.org= | Step-by-step NCS operational playbook, on-air scripts, and contest guidelines. |
-| 📜 [[file:dev_log.org][Developer Chronicle]] | =dev_log.org= | Dated engineering journal entries, release milestones (v0.1.0 → v0.1.2), and bug logs. |
+| 📜 [[file:dev_log.org][Developer Chronicle]] | =dev_log.org= | Dated engineering journal entries, release milestones (v0.1.0 → v0.1.3), and bug logs. |
 | 📚 [[file:deck_authoring.org][Trivia Curation Guide]] | =deck_authoring.org= | Markdown deck formatting standards, syntax rules, authoring tips, and CLI validator. |
 | 💡 [[file:ideas_roadmap.org][Ideas & Future Roadmap]] | =ideas_roadmap.org= | Scratchpad for future feature proposals, OpenTDB integrations, and audio cues. |
 
@@ -83,7 +83,7 @@ The entire application is controlled via intuitive single-key shortcuts:
 
 ** Environment & Toolchain
 
-- *Current Release:* v0.1.2
+- *Current Release:* v0.1.3
 - *Language:* Rust (2024 Edition)
 - *TUI Framework:* [[https://github.com/ratatui-org/ratatui][Ratatui v0.30.2]] on [[https://github.com/crossterm-rs/crossterm][Crossterm v0.29.0]]
 - *Async Runtime:* [[https://tokio.rs][Tokio v1.53.1]] (full multi-threaded runtime)

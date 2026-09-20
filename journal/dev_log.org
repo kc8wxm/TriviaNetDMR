@@ -99,6 +99,24 @@ contest management.
   - Finished Git-Flow feature branches =feature/show-app-version= and =feature/empty-default-json=,
     merged into =develop=, and pushed to GitHub.
 
+** [2026-09-20] Release v0.1.3 — TUI Version Display, Clean-slate Initial State, Release Automation & Agent Integration
+- *Focus:* Compile-time version reflection, pristine zero-state session handling, and end-to-end release automation.
+- *Features & Highlights:*
+  - *Compile-Time Version Pill:* Prominently displayed compile-time package version =v0.1.3=
+    via =env!("CARGO_PKG_VERSION")= in bold =LightGreen= across the TUI dashboard header, help reference modal,
+    CLI deck validator diagnostics, and exit score summaries.
+  - *Clean-Start Empty Session Defaults:* Reset =trivia_log.json= to a fresh initial zero-state template;
+    hardened =AppStateDump= with Serde default annotations (=default_round_number() = 1=) and resilient
+    empty-file (0-byte) recovery preventing desync crashes.
+  - *Release Automation Engine & Workspace Skill:* Created =scripts/release.sh= and integrated
+    the =software-release= workspace skill to orchestrate pre-flight testing, question deck validation,
+    Git-Flow release branching, version bumping, release binary compilation, and distribution packaging.
+- *Quality Assurance:*
+  - Full automated test suite passing with 27 unit tests (100% pass rate).
+  - Pre-flight validated all question decks in =Topic/= with 0 errors and 0 warnings.
+  - Finished Git-Flow release *v0.1.3*, tagged =v0.1.3=, merged into =master= and =develop=,
+    and packaged distribution archive =dist/TriviaNetDMR-v0.1.3-linux-x86_64.tar.gz=.
+
 * Solved Engineering Hurdles & Bug Logs
 
 ** Issue 1: Terminal Raw Mode Residuals on Abnormal Exit
