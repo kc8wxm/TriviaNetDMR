@@ -6,7 +6,7 @@ use crate::state::{App, InputMode};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use std::io;
 
@@ -34,11 +34,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 2. Application and QRZ Client initialization
     let mut app = App::new();
     let qrz_client = std::sync::Arc::new(qrz::QrzClient::new());
-    
+
+    // Attempt to load previous session from log file
+    let log_file = "trivia_log.json";
+    let mut loaded_from_file = false;
+    if std::path::Path::new(log_file).exists() {
+        if let Err(e) = app.load_from_file(log_file) {
+            app.error_message = Some(format!("Failed to load session: {}", e));
+        } else {
+            loaded_from_file = true;
+        }
+    }
+
     if qrz_client.is_mocked() {
-        app.api_status = String::from("Offline (Mock Mode)");
+        if loaded_from_file {
+            app.api_status = String::from("Offline (Mock) [Restored]");
+        } else {
+            app.api_status = String::from("Offline (Mock Mode)");
+        }
     } else {
-        app.api_status = String::from("Online (QRZ Live)");
+        if loaded_from_file {
+            app.api_status = String::from("Online (Live) [Restored]");
+        } else {
+            app.api_status = String::from("Online (QRZ Live)");
+        }
     }
 
     // 3. Event Channels setup
@@ -53,15 +72,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let timeout = tick_rate
                 .checked_sub(last_tick.elapsed())
                 .unwrap_or_else(|| std::time::Duration::from_secs(0));
-            
-            if event::poll(timeout).unwrap_or(false) {
-                if let Event::Key(key) = event::read().unwrap() {
-                    if key.kind == event::KeyEventKind::Press {
-                        let _ = keys_tx.send(AppEvent::Key(key)).await;
-                    }
-                }
+
+            if event::poll(timeout).unwrap_or(false)
+                && let Event::Key(key) = event::read().unwrap()
+                && key.kind == event::KeyEventKind::Press
+            {
+                let _ = keys_tx.send(AppEvent::Key(key)).await;
             }
-            
+
             if last_tick.elapsed() >= tick_rate {
                 let _ = keys_tx.send(AppEvent::Tick).await;
                 last_tick = std::time::Instant::now();
@@ -74,6 +92,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         terminal.draw(|f| ui::draw(f, &app))?;
 
         if let Some(app_evt) = event_rx.recv().await {
+            let mut state_changed = false;
             match app_evt {
                 AppEvent::Key(key) => match app.input_mode {
                     // --- INPUT MODE: ADD CHECK-IN ---
@@ -82,29 +101,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             let trimmed = app.input_buffer.trim().to_uppercase();
                             if !trimmed.is_empty() {
                                 let id = app.add_participant(trimmed.clone());
-                                
+                                state_changed = true;
+
                                 // Spawn background async lookup for QRZ details
                                 let qrz = qrz_client.clone();
                                 let tx = event_tx.clone();
                                 tokio::spawn(async move {
                                     match qrz.lookup(&trimmed).await {
                                         Ok(data) => {
-                                            let _ = tx.send(AppEvent::QrzResult {
-                                                id,
-                                                name: data.name,
-                                                location: data.location,
-                                                is_mock: data.is_mock,
-                                            }).await;
+                                            let _ = tx
+                                                .send(AppEvent::QrzResult {
+                                                    id,
+                                                    name: data.name,
+                                                    location: data.location,
+                                                    is_mock: data.is_mock,
+                                                })
+                                                .await;
                                         }
                                         Err(_) => {
                                             // Fallback to region-specific mock on error
                                             let mock = qrz::QrzClient::get_mock_data(&trimmed);
-                                            let _ = tx.send(AppEvent::QrzResult {
-                                                id,
-                                                name: mock.name,
-                                                location: mock.location,
-                                                is_mock: true,
-                                            }).await;
+                                            let _ = tx
+                                                .send(AppEvent::QrzResult {
+                                                    id,
+                                                    name: mock.name,
+                                                    location: mock.location,
+                                                    is_mock: true,
+                                                })
+                                                .await;
                                         }
                                     }
                                 });
@@ -119,12 +143,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         KeyCode::Backspace => {
                             app.input_buffer.pop();
                         }
-                        KeyCode::Char(c) => {
+                        KeyCode::Char(c)
                             // Enforce reasonable callsign length (e.g. 10 chars)
-                            if app.input_buffer.len() < 10 {
+                            if app.input_buffer.len() < 10 => {
                                 app.input_buffer.push(c);
                             }
-                        }
                         _ => {}
                     },
 
@@ -139,24 +162,48 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         KeyCode::Char('n') | KeyCode::Enter => {
                             app.next_turn();
+                            state_changed = true;
                         }
                         KeyCode::Char('p') => {
                             app.prev_turn();
+                            state_changed = true;
                         }
                         KeyCode::Char('y') => {
                             app.award_trivia_point();
+                            state_changed = true;
                         }
                         KeyCode::Char('x') => {
                             app.remove_trivia_point();
+                            state_changed = true;
                         }
                         KeyCode::Char('b') => {
                             app.award_bonus_point();
+                            state_changed = true;
                         }
                         KeyCode::Char('v') => {
                             app.remove_bonus_point();
+                            state_changed = true;
                         }
                         KeyCode::Char('r') => {
                             app.next_round();
+                            state_changed = true;
+                        }
+                        KeyCode::Backspace | KeyCode::Char('k') => {
+                            app.input_mode = InputMode::ClearConfirm;
+                        }
+                        _ => {}
+                    },
+
+                    // --- INPUT MODE: CLEAR LOG CONFIRMATION ---
+                    InputMode::ClearConfirm => match key.code {
+                        KeyCode::Char('y') | KeyCode::Char('Y') => {
+                            if let Err(e) = app.clear_session("trivia_log.json") {
+                                app.error_message = Some(format!("Failed to clear session: {}", e));
+                            }
+                            app.input_mode = InputMode::Normal;
+                        }
+                        KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                            app.input_mode = InputMode::Normal;
                         }
                         _ => {}
                     },
@@ -164,13 +211,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 AppEvent::Tick => {
                     // Can do periodic tasks here if needed
                 }
-                AppEvent::QrzResult { id, name, location, is_mock } => {
+                AppEvent::QrzResult {
+                    id,
+                    name,
+                    location,
+                    is_mock,
+                } => {
                     if let Some(p) = app.participants.get_mut(id) {
                         p.name = name;
                         p.location = location;
                         p.qrz_fetched = !is_mock;
+                        state_changed = true;
                     }
                 }
+            }
+
+            if state_changed {
+                let _ = app.save_to_file("trivia_log.json");
             }
         }
     }
@@ -184,14 +241,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     terminal.show_cursor()?;
 
+    // Save final state before exiting
+    let _ = app.save_to_file("trivia_log.json");
+
     // 6. Print Final Scoreboard
     if !app.participants.is_empty() {
         println!("\n=========================================================");
         println!("             🏆 TriviaNetDMR Final Scores 🏆");
         println!("=========================================================");
-        println!("{:<4} {:<10} {:<25} {:<6}", "Pos", "Callsign", "Operator Name", "Score");
+        println!(
+            "{:<4} {:<10} {:<25} {:<6}",
+            "Pos", "Callsign", "Operator Name", "Score"
+        );
         println!("---------------------------------------------------------");
-        
+
         let mut final_scores = app.participants.clone();
         final_scores.sort_by(|a, b| {
             b.total_score()

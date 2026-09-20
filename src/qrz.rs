@@ -16,10 +16,20 @@ pub struct QrzClient {
     client: reqwest::Client,
 }
 
+impl Default for QrzClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl QrzClient {
     pub fn new() -> Self {
-        let username = std::env::var("QRZ_USERNAME").ok().filter(|s| !s.trim().is_empty());
-        let password = std::env::var("QRZ_PASSWORD").ok().filter(|s| !s.trim().is_empty());
+        let username = std::env::var("QRZ_USERNAME")
+            .ok()
+            .filter(|s| !s.trim().is_empty());
+        let password = std::env::var("QRZ_PASSWORD")
+            .ok()
+            .filter(|s| !s.trim().is_empty());
 
         Self {
             username,
@@ -61,13 +71,16 @@ impl QrzClient {
             s_key, call_upper
         );
 
-        let resp = self.client.get(&url)
+        let resp = self
+            .client
+            .get(&url)
             .header("User-Agent", "TriviaNetDMR/1.0")
             .send()
             .await
             .map_err(|e| format!("Request failed: {}", e))?;
 
-        let body = resp.text()
+        let body = resp
+            .text()
             .await
             .map_err(|e| format!("Failed to read response: {}", e))?;
 
@@ -76,12 +89,12 @@ impl QrzClient {
 
     async fn get_session_key(&self) -> Result<String, String> {
         let mut key_guard = self.session_key.lock().await;
-        
+
         // Session keys are typically valid for 24h. We cache for 12 hours to be safe.
-        if let Some((ref key, ref instant)) = *key_guard {
-            if instant.elapsed() < std::time::Duration::from_secs(12 * 3600) {
-                return Ok(key.clone());
-            }
+        if let Some((ref key, ref instant)) = *key_guard
+            && instant.elapsed() < std::time::Duration::from_secs(12 * 3600)
+        {
+            return Ok(key.clone());
         }
 
         let username = self.username.as_ref().ok_or("No QRZ username")?;
@@ -92,13 +105,16 @@ impl QrzClient {
             username, password
         );
 
-        let resp = self.client.get(&url)
+        let resp = self
+            .client
+            .get(&url)
             .header("User-Agent", "TriviaNetDMR/1.0")
             .send()
             .await
             .map_err(|e| format!("Login request failed: {}", e))?;
 
-        let body = resp.text()
+        let body = resp
+            .text()
             .await
             .map_err(|e| format!("Login failed to read: {}", e))?;
 
@@ -110,7 +126,8 @@ impl QrzClient {
             return Err(err_node.text().unwrap_or("Unknown login error").to_string());
         }
 
-        let key_node = doc.descendants()
+        let key_node = doc
+            .descendants()
             .find(|n| n.has_tag_name("Key"))
             .ok_or("No Session Key found in login XML")?;
 
@@ -121,8 +138,7 @@ impl QrzClient {
     }
 
     fn parse_qrz_xml(callsign: &str, xml: &str) -> Result<QrzData, String> {
-        let doc = roxmltree::Document::parse(xml)
-            .map_err(|e| format!("XML parse error: {}", e))?;
+        let doc = roxmltree::Document::parse(xml).map_err(|e| format!("XML parse error: {}", e))?;
 
         // Check for session/API level errors (like expired session key)
         if let Some(err_node) = doc.descendants().find(|n| n.has_tag_name("Error")) {
@@ -132,15 +148,31 @@ impl QrzClient {
             }
         }
 
-        let call_node = doc.descendants()
+        let call_node = doc
+            .descendants()
             .find(|n| n.has_tag_name("Callsign"))
             .ok_or_else(|| format!("Callsign {} not found in QRZ database", callsign))?;
 
-        let fname = call_node.descendants().find(|n| n.has_tag_name("fname")).and_then(|n| n.text().map(String::from));
-        let name = call_node.descendants().find(|n| n.has_tag_name("name")).and_then(|n| n.text().map(String::from));
-        let addr2 = call_node.descendants().find(|n| n.has_tag_name("addr2")).and_then(|n| n.text().map(String::from));
-        let state = call_node.descendants().find(|n| n.has_tag_name("state")).and_then(|n| n.text().map(String::from));
-        let country = call_node.descendants().find(|n| n.has_tag_name("country")).and_then(|n| n.text().map(String::from));
+        let fname = call_node
+            .descendants()
+            .find(|n| n.has_tag_name("fname"))
+            .and_then(|n| n.text().map(String::from));
+        let name = call_node
+            .descendants()
+            .find(|n| n.has_tag_name("name"))
+            .and_then(|n| n.text().map(String::from));
+        let addr2 = call_node
+            .descendants()
+            .find(|n| n.has_tag_name("addr2"))
+            .and_then(|n| n.text().map(String::from));
+        let state = call_node
+            .descendants()
+            .find(|n| n.has_tag_name("state"))
+            .and_then(|n| n.text().map(String::from));
+        let country = call_node
+            .descendants()
+            .find(|n| n.has_tag_name("country"))
+            .and_then(|n| n.text().map(String::from));
 
         let full_name = match (fname, name) {
             (Some(f), Some(n)) => Some(format!("{} {}", f, n)),
@@ -169,7 +201,7 @@ impl QrzClient {
     /// Generates beautiful, region-appropriate ham radio mock data
     pub fn get_mock_data(callsign: &str) -> QrzData {
         let call = callsign.trim().to_uppercase();
-        
+
         // Check international prefixes first
         let (name, location) = if call.starts_with("VE") || call.starts_with("VA") {
             ("Maple Leaf", "Toronto, ON, Canada")
@@ -183,7 +215,10 @@ impl QrzClient {
             ("Pierre Paris", "Paris, France")
         } else {
             // US and other region fallback based on digit
-            let region_num = call.chars().find(|c| c.is_ascii_digit()).and_then(|c| c.to_digit(10));
+            let region_num = call
+                .chars()
+                .find(|c| c.is_ascii_digit())
+                .and_then(|c| c.to_digit(10));
             match region_num {
                 Some(1) => ("Alice Newhaven", "Boston, MA, USA"),
                 Some(2) => ("Bob Jersey", "Newark, NJ, USA"),

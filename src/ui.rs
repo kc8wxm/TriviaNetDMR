@@ -1,10 +1,10 @@
 use crate::state::{App, InputMode};
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph, Row, Table, Wrap},
-    Frame,
 };
 
 /// Helper function to create a centered Rect for popups
@@ -55,16 +55,34 @@ pub fn draw(f: &mut Frame, app: &App) {
         .split(header_chunk);
 
     let title_p = Paragraph::new(Line::from(vec![
-        Span::styled(" 📻 TriviaNetDMR ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " 📻 TriviaNetDMR ",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::styled("Net Control Companion", Style::default().fg(Color::Gray)),
     ]))
-    .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::DarkGray)));
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::DarkGray)),
+    );
 
     let round_status_p = Paragraph::new(Line::from(vec![
         Span::styled(" Round: ", Style::default().fg(Color::Gray)),
-        Span::styled(format!("{}", app.round_number), Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            format!("{}", app.round_number),
+            Style::default()
+                .fg(Color::LightCyan)
+                .add_modifier(Modifier::BOLD),
+        ),
     ]))
-    .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::DarkGray)));
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::DarkGray)),
+    );
 
     let api_status_style = if app.api_status.contains("Offline") {
         Style::default().fg(Color::LightYellow)
@@ -75,12 +93,15 @@ pub fn draw(f: &mut Frame, app: &App) {
         Span::styled(" QRZ API: ", Style::default().fg(Color::Gray)),
         Span::styled(&app.api_status, api_status_style),
     ]))
-    .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::DarkGray)));
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::DarkGray)),
+    );
 
     f.render_widget(title_p, header_layout[0]);
     f.render_widget(round_status_p, header_layout[1]);
     f.render_widget(api_p, header_layout[2]);
-
 
     // ==========================================
     // 2. MAIN BODY
@@ -96,9 +117,18 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     // -- Left side: Participant Table --
     let table_rect = body_layout[0];
-    let header_cells = ["Act", "Callsign", "Name", "Check-in", "Trivia", "Bonus", "Score"]
-        .iter()
-        .map(|h| Span::styled(*h, Style::default().fg(Color::LightBlue).add_modifier(Modifier::BOLD)));
+    let header_cells = [
+        "Act", "Callsign", "Name", "Check-in", "Trivia", "Bonus", "Score",
+    ]
+    .iter()
+    .map(|h| {
+        Span::styled(
+            *h,
+            Style::default()
+                .fg(Color::LightBlue)
+                .add_modifier(Modifier::BOLD),
+        )
+    });
     let header_row = Row::new(header_cells).height(1).bottom_margin(1);
 
     let mut rows = Vec::new();
@@ -106,10 +136,12 @@ pub fn draw(f: &mut Frame, app: &App) {
         if let Some(p) = app.participants.get(p_id) {
             let is_active = i == app.current_queue_index;
             let active_marker = if is_active { " 👉 " } else { "    " };
-            
+
             // Text color depends on whether participant is currently active
             let cell_style = if is_active {
-                Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::LightGreen)
+                    .add_modifier(Modifier::BOLD)
             } else if i < app.current_queue_index {
                 Style::default().fg(Color::DarkGray) // Already took their turn
             } else {
@@ -117,9 +149,17 @@ pub fn draw(f: &mut Frame, app: &App) {
             };
 
             let row_cells = vec![
-                Span::styled(active_marker, Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    active_marker,
+                    Style::default()
+                        .fg(Color::LightGreen)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::styled(format!("{:<8}", p.callsign), cell_style),
-                Span::styled(format!("{:<15}", p.name.as_deref().unwrap_or("Fetching...")), cell_style),
+                Span::styled(
+                    format!("{:<15}", p.name.as_deref().unwrap_or("Fetching...")),
+                    cell_style,
+                ),
                 Span::styled(format!(" {:^8}", p.points_checkin), cell_style),
                 Span::styled(format!(" {:^6}", p.points_trivia), cell_style),
                 Span::styled(format!(" {:^5}", p.points_bonus), cell_style),
@@ -149,13 +189,12 @@ pub fn draw(f: &mut Frame, app: &App) {
             Constraint::Length(8),  // Trivia Pt
             Constraint::Length(8),  // Bonus Pt
             Constraint::Length(8),  // Total Score
-        ]
+        ],
     )
     .header(header_row)
     .block(list_block);
 
     f.render_widget(table, table_rect);
-
 
     // -- Right side: Details & Status --
     let right_rect = body_layout[1];
@@ -163,7 +202,7 @@ pub fn draw(f: &mut Frame, app: &App) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(11), // Selected Operator Card
-            Constraint::Min(4),    // Net Stats / Round Status block
+            Constraint::Min(4),     // Net Stats / Round Status block
         ])
         .split(right_rect);
 
@@ -178,41 +217,78 @@ pub fn draw(f: &mut Frame, app: &App) {
         let qrz_status_span = if active_op.qrz_fetched {
             Span::styled(" ✔ QRZ Verified", Style::default().fg(Color::LightGreen))
         } else {
-            Span::styled(" ⌛ Fetching QRZ data...", Style::default().fg(Color::LightYellow))
+            Span::styled(
+                " ⌛ Fetching QRZ data...",
+                Style::default().fg(Color::LightYellow),
+            )
         };
 
         let op_lines = vec![
             Line::from(vec![
                 Span::styled(" Callsign:  ", Style::default().fg(Color::Gray)),
-                Span::styled(&active_op.callsign, Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    &active_op.callsign,
+                    Style::default()
+                        .fg(Color::LightCyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("    "),
                 qrz_status_span,
             ]),
             Line::from(vec![
                 Span::styled(" Name:      ", Style::default().fg(Color::Gray)),
-                Span::styled(active_op.name.as_deref().unwrap_or("Unknown Operator"), Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    active_op.name.as_deref().unwrap_or("Unknown Operator"),
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                ),
             ]),
             Line::from(vec![
                 Span::styled(" Location:  ", Style::default().fg(Color::Gray)),
-                Span::styled(active_op.location.as_deref().unwrap_or("No details available"), Style::default().fg(Color::White)),
+                Span::styled(
+                    active_op
+                        .location
+                        .as_deref()
+                        .unwrap_or("No details available"),
+                    Style::default().fg(Color::White),
+                ),
             ]),
             Line::raw(""),
-            Line::from(vec![
-                Span::styled(" Current Scorecard: ", Style::default().fg(Color::Yellow).add_modifier(Modifier::UNDERLINED)),
-            ]),
+            Line::from(vec![Span::styled(
+                " Current Scorecard: ",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::UNDERLINED),
+            )]),
             Line::from(vec![
                 Span::raw("  • Check-in Score:   "),
-                Span::styled(format!("{} pt", active_op.points_checkin), Style::default().fg(Color::LightGreen)),
+                Span::styled(
+                    format!("{} pt", active_op.points_checkin),
+                    Style::default().fg(Color::LightGreen),
+                ),
             ]),
             Line::from(vec![
                 Span::raw("  • Trivia Score:     "),
-                Span::styled(format!("{} pt", active_op.points_trivia), Style::default().fg(Color::LightGreen)),
-                Span::styled("  [y] correct  | [x] deduct", Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    format!("{} pt", active_op.points_trivia),
+                    Style::default().fg(Color::LightGreen),
+                ),
+                Span::styled(
+                    "  [y] correct  | [x] deduct",
+                    Style::default().fg(Color::DarkGray),
+                ),
             ]),
             Line::from(vec![
                 Span::raw("  • Bonus Score:      "),
-                Span::styled(format!("{} pt", active_op.points_bonus), Style::default().fg(Color::LightGreen)),
-                Span::styled("  [b] bonus    | [v] deduct", Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    format!("{} pt", active_op.points_bonus),
+                    Style::default().fg(Color::LightGreen),
+                ),
+                Span::styled(
+                    "  [b] bonus    | [v] deduct",
+                    Style::default().fg(Color::DarkGray),
+                ),
             ]),
         ];
 
@@ -225,7 +301,10 @@ pub fn draw(f: &mut Frame, app: &App) {
         // No participants in the queue
         let op_card = Paragraph::new(vec![
             Line::raw(""),
-            Line::from(Span::styled("  Queue is currently empty.", Style::default().fg(Color::LightYellow))),
+            Line::from(Span::styled(
+                "  Queue is currently empty.",
+                Style::default().fg(Color::LightYellow),
+            )),
             Line::raw(""),
             Line::raw("  Press [c] to check-in the first operator."),
         ])
@@ -242,58 +321,133 @@ pub fn draw(f: &mut Frame, app: &App) {
         .border_style(Style::default().fg(Color::DarkGray));
 
     let total_checkins = app.participants.len();
-    let current_turn_num = if app.queue.is_empty() { 0 } else { std::cmp::min(app.current_queue_index + 1, app.queue.len()) };
+    let current_turn_num = if app.queue.is_empty() {
+        0
+    } else {
+        std::cmp::min(app.current_queue_index + 1, app.queue.len())
+    };
     let total_queue_len = app.queue.len();
 
     let mut summary_lines = vec![
         Line::from(vec![
             Span::raw(" Total Unique Check-ins: "),
-            Span::styled(format!("{}", total_checkins), Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                format!("{}", total_checkins),
+                Style::default()
+                    .fg(Color::LightCyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]),
         Line::from(vec![
             Span::raw(" Current Turn Progress:  "),
-            Span::styled(format!("{}/{}", current_turn_num, total_queue_len), Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                format!("{}/{}", current_turn_num, total_queue_len),
+                Style::default()
+                    .fg(Color::LightCyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]),
     ];
 
     if !app.queue.is_empty() && app.current_queue_index >= app.queue.len() {
         summary_lines.push(Line::raw(""));
-        summary_lines.push(Line::from(Span::styled(" 🏆 ROUND COMPLETED! 🏆", Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD))));
-        summary_lines.push(Line::from(Span::styled(" Press [r] to begin the next round (order rotates!).", Style::default().fg(Color::LightYellow))));
+        summary_lines.push(Line::from(Span::styled(
+            " 🏆 ROUND COMPLETED! 🏆",
+            Style::default()
+                .fg(Color::LightGreen)
+                .add_modifier(Modifier::BOLD),
+        )));
+        summary_lines.push(Line::from(Span::styled(
+            " Press [r] to begin the next round (order rotates!).",
+            Style::default().fg(Color::LightYellow),
+        )));
     } else if app.queue.is_empty() {
         summary_lines.push(Line::raw(""));
-        summary_lines.push(Line::from(Span::styled(" 📡 Ready for trivia net operations. ", Style::default().fg(Color::Gray))));
+        summary_lines.push(Line::from(Span::styled(
+            " 📡 Ready for trivia net operations. ",
+            Style::default().fg(Color::Gray),
+        )));
     }
 
-    let summary_p = Paragraph::new(summary_lines)
-        .block(summary_block);
+    let summary_p = Paragraph::new(summary_lines).block(summary_block);
     f.render_widget(summary_p, summary_rect);
-
 
     // ==========================================
     // 3. FOOTER
     // ==========================================
     let footer_chunk = chunks[2];
     let controls_p = Paragraph::new(Line::from(vec![
-        Span::styled(" [c]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)), Span::raw(" Check-in "),
-        Span::styled(" [n/Enter]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)), Span::raw(" Next Turn "),
-        Span::styled(" [p]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)), Span::raw(" Prev Turn "),
-        Span::styled(" [y]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)), Span::raw(" Correct (+1pt) "),
-        Span::styled(" [b]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)), Span::raw(" Bonus (+1pt) "),
-        Span::styled(" [r]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)), Span::raw(" Rotate Round "),
-        Span::styled(" [q]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)), Span::raw(" Quit "),
+        Span::styled(
+            " [c]",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" Check-in "),
+        Span::styled(
+            " [n/Enter]",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" Next Turn "),
+        Span::styled(
+            " [p]",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" Prev Turn "),
+        Span::styled(
+            " [y]",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" Correct (+1pt) "),
+        Span::styled(
+            " [b]",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" Bonus (+1pt) "),
+        Span::styled(
+            " [r]",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" Rotate Round "),
+        Span::styled(
+            " [Backspace]",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" Clear Log "),
+        Span::styled(
+            " [q]",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" Quit "),
     ]))
-    .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::DarkGray)));
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::DarkGray)),
+    );
 
     f.render_widget(controls_p, footer_chunk);
-
 
     // ==========================================
     // 4. POPUP INPUT MODAL
     // ==========================================
     if let InputMode::AddCheckin = app.input_mode {
         let popup_area = centered_rect(50, 20, size);
-        
+
         // Clear background of the popup area
         f.render_widget(Clear, popup_area);
 
@@ -307,14 +461,68 @@ pub fn draw(f: &mut Frame, app: &App) {
             Line::raw(""),
             Line::from(vec![
                 Span::raw(" > "),
-                Span::styled(&app.input_buffer, Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD)),
-                Span::styled("_", Style::default().fg(Color::LightGreen).add_modifier(Modifier::SLOW_BLINK)), // Blinking cursor block
+                Span::styled(
+                    &app.input_buffer,
+                    Style::default()
+                        .fg(Color::LightGreen)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    "_",
+                    Style::default()
+                        .fg(Color::LightGreen)
+                        .add_modifier(Modifier::SLOW_BLINK),
+                ), // Blinking cursor block
             ]),
             Line::raw(""),
-            Line::from(Span::styled(" Press [Enter] to submit, [Esc] to cancel.", Style::default().fg(Color::DarkGray))),
+            Line::from(Span::styled(
+                " Press [Enter] to submit, [Esc] to cancel.",
+                Style::default().fg(Color::DarkGray),
+            )),
         ];
 
         let input_p = Paragraph::new(input_text).block(input_block);
         f.render_widget(input_p, popup_area);
+    }
+
+    // ==========================================
+    // 5. POPUP CLEAR CONFIRM MODAL
+    // ==========================================
+    if let InputMode::ClearConfirm = app.input_mode {
+        let popup_area = centered_rect(50, 20, size);
+
+        // Clear background of the popup area
+        f.render_widget(Clear, popup_area);
+
+        let confirm_block = Block::default()
+            .title(" ⚠️ Clear Session Log ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::LightRed));
+
+        let confirm_text = vec![
+            Line::raw(" Are you sure you want to delete the log"),
+            Line::raw(" and reset all contestants and scores?"),
+            Line::raw(""),
+            Line::from(vec![
+                Span::styled(" Press ", Style::default().fg(Color::Gray)),
+                Span::styled(
+                    "[y]",
+                    Style::default()
+                        .fg(Color::LightRed)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(" to confirm reset, or ", Style::default().fg(Color::Gray)),
+                Span::styled(
+                    "[n or Esc]",
+                    Style::default()
+                        .fg(Color::LightGreen)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(" to cancel.", Style::default().fg(Color::Gray)),
+            ]),
+        ];
+
+        let confirm_p = Paragraph::new(confirm_text).block(confirm_block);
+        f.render_widget(confirm_p, popup_area);
     }
 }

@@ -31,10 +31,11 @@ impl Participant {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum InputMode {
     Normal,
     AddCheckin,
+    ClearConfirm,
 }
 
 #[derive(Clone, Debug)]
@@ -49,6 +50,12 @@ pub struct App {
     pub input_buffer: String,
     pub error_message: Option<String>,
     pub api_status: String,
+}
+
+impl Default for App {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl App {
@@ -69,7 +76,7 @@ impl App {
     /// Returns the ID of the newly added participant.
     pub fn add_participant(&mut self, callsign: String) -> usize {
         let call_upper = callsign.trim().to_uppercase();
-        
+
         // Prevent duplicate check-ins in the same session, but we can append to the queue again if needed.
         // Actually, let's see if the participant already exists.
         if let Some(existing) = self.participants.iter().find(|p| p.callsign == call_upper) {
@@ -133,7 +140,7 @@ impl App {
         if self.queue.is_empty() {
             return;
         }
-        
+
         // Rotate queue left by 1.
         // E.g. [A, B, C, D] -> [B, C, D, A]
         self.queue.rotate_left(1);
@@ -157,21 +164,69 @@ impl App {
 
     /// Decrements trivia point from active participant (useful for correction)
     pub fn remove_trivia_point(&mut self) {
-        if let Some(p) = self.active_participant_mut() {
-            if p.points_trivia > 0 {
-                p.points_trivia -= 1;
-            }
+        if let Some(p) = self.active_participant_mut()
+            && p.points_trivia > 0
+        {
+            p.points_trivia -= 1;
         }
     }
 
     /// Decrements bonus point from active participant (useful for correction)
     pub fn remove_bonus_point(&mut self) {
-        if let Some(p) = self.active_participant_mut() {
-            if p.points_bonus > 0 {
-                p.points_bonus -= 1;
-            }
+        if let Some(p) = self.active_participant_mut()
+            && p.points_bonus > 0
+        {
+            p.points_bonus -= 1;
         }
     }
+
+    /// Saves the current state of participants, queue, active turn, and round to a JSON file.
+    pub fn save_to_file(&self, filepath: &str) -> Result<(), std::io::Error> {
+        let dump = AppStateDump {
+            participants: self.participants.clone(),
+            queue: self.queue.clone(),
+            current_queue_index: self.current_queue_index,
+            round_number: self.round_number,
+        };
+        let serialized = serde_json::to_string_pretty(&dump).map_err(std::io::Error::other)?;
+        std::fs::write(filepath, serialized)?;
+        Ok(())
+    }
+
+    /// Loads the state from a JSON file, restoring participants, queue, active turn, and round.
+    pub fn load_from_file(&mut self, filepath: &str) -> Result<(), std::io::Error> {
+        let content = std::fs::read_to_string(filepath)?;
+        let dump: AppStateDump = serde_json::from_str(&content).map_err(std::io::Error::other)?;
+
+        self.participants = dump.participants;
+        self.queue = dump.queue;
+        self.current_queue_index = dump.current_queue_index;
+        self.round_number = dump.round_number;
+        Ok(())
+    }
+
+    /// Resets the application state to a clean slate and deletes the saved log file from disk.
+    pub fn clear_session(&mut self, filepath: &str) -> Result<(), std::io::Error> {
+        self.participants.clear();
+        self.queue.clear();
+        self.current_queue_index = 0;
+        self.round_number = 1;
+        self.error_message = None;
+
+        if std::path::Path::new(filepath).exists() {
+            std::fs::remove_file(filepath)?;
+        }
+        Ok(())
+    }
+}
+
+/// Helper struct for serializing and deserializing the state of the application.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct AppStateDump {
+    pub participants: Vec<Participant>,
+    pub queue: Vec<usize>,
+    pub current_queue_index: usize,
+    pub round_number: usize,
 }
 
 #[cfg(test)]
@@ -253,5 +308,66 @@ mod tests {
         // Late check-in
         let id_c = app.add_participant("N1AAA".to_string());
         assert_eq!(app.queue, vec![id_a, id_b, id_c]);
+    }
+
+    #[test]
+    fn test_save_and_load() {
+        let temp_file = "test_temp_session.json";
+
+        let mut app = App::new();
+        let id_a = app.add_participant("W1AW".to_string());
+        let id_b = app.add_participant("K1ABC".to_string());
+
+        // Award points and modify state
+        app.award_trivia_point();
+        app.award_bonus_point();
+        app.next_turn();
+        app.next_round();
+
+        // Save to file
+        app.save_to_file(temp_file)
+            .expect("Failed to save to test file");
+
+        // Load into a new App instance
+        let mut loaded_app = App::new();
+        loaded_app
+            .load_from_file(temp_file)
+            .expect("Failed to load from test file");
+
+        // Clean up temp file immediately
+        let _ = std::fs::remove_file(temp_file);
+
+        // Verify state is restored exactly
+        assert_eq!(loaded_app.round_number, app.round_number);
+        assert_eq!(loaded_app.current_queue_index, app.current_queue_index);
+        assert_eq!(loaded_app.queue, app.queue);
+        assert_eq!(loaded_app.participants.len(), app.participants.len());
+
+        assert_eq!(loaded_app.participants[id_a].callsign, "W1AW");
+        assert_eq!(loaded_app.participants[id_a].points_trivia, 1);
+        assert_eq!(loaded_app.participants[id_a].points_bonus, 1);
+
+        assert_eq!(loaded_app.participants[id_b].callsign, "K1ABC");
+        assert_eq!(loaded_app.participants[id_b].points_trivia, 0);
+    }
+
+    #[test]
+    fn test_clear_session() {
+        let temp_file = "test_clear_session.json";
+        let mut app = App::new();
+        app.add_participant("W1AW".to_string());
+        app.save_to_file(temp_file).expect("Failed to save");
+
+        assert_eq!(app.participants.len(), 1);
+        assert!(std::path::Path::new(temp_file).exists());
+
+        app.clear_session(temp_file)
+            .expect("Failed to clear session");
+
+        assert_eq!(app.participants.len(), 0);
+        assert_eq!(app.queue.len(), 0);
+        assert_eq!(app.round_number, 1);
+        assert_eq!(app.current_queue_index, 0);
+        assert!(!std::path::Path::new(temp_file).exists());
     }
 }
