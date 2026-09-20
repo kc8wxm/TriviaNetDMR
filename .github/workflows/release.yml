@@ -74,6 +74,7 @@ jobs:
           cp target/${{ matrix.target }}/release/${{ matrix.artifact_name }} package/
           cp -r Topic/*.md package/Topic/
           cp GEMINI.md package/README.md
+          cp run.bat package/
           cd package
           7z a -tzip ../${{ matrix.asset_name }}.zip *
           cd ..
