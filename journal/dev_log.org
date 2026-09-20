@@ -1,0 +1,101 @@
+#+TITLE: TriviaNetDMR — Developer Chronicle & Engineering Log
+#+AUTHOR: Steve Sutton (KC8WXM)
+#+DATE: 2026-09-20
+#+STARTUP: showall
+#+OPTIONS: toc:2 num:t
+#+TAGS: { LOG(l) RELEASE(r) BUG(b) FEATURE(f) }
+
+* Project Genesis & Philosophy
+
+TriviaNetDMR was born out of real-world frustration running amateur radio trivia
+nets over DMR repeaters. Existing paper logs, spreadsheets, and general logbooks
+were too clunky:
+- Entering a callsign during check-ins broke conversational flow while searching QRZ.
+- Managing who answered first across multiple rounds on paper was chaotic.
+- Manually calculating check-in points, trivia points, and bonus points was error-prone.
+
+The solution was to build a purpose-engineered terminal dashboard in Rust with
+sub-millisecond responsiveness, asynchronous callbook intelligence, and automated
+contest management.
+
+* Chronological Development Journal
+
+** [2026-09-18] Inception & Core TUI Architecture
+- *Focus:* Terminal layout and domain model design.
+- Selected *Ratatui* and *Crossterm* as the foundational TUI stack.
+- Built the initial four-quadrant dashboard layout:
+  - Header with title and round status.
+  - Trivia card displaying question prompts and canonical answers.
+  - Roster table with active turn indicator.
+  - Operator QRZ profile card and net summary statistics.
+- Designed pure domain models in =src/state.rs=: =Participant=, =App=, and =InputMode=.
+- Implemented queue rotation algorithm: =rotate_queue()= to ensure fair turn distribution.
+
+** [2026-09-19] Async QRZ Integration & Markdown Question Engine
+- *Focus:* Asynchronous networking and question deck parsing.
+- Integrated =reqwest= and =tokio= to perform non-blocking QRZ.com XML database lookups.
+- Implemented =roxmltree= for zero-copy XML response parsing and session key caching.
+- Created the procedural *Region-Aware Mock Generator*:
+  - Parses US call districts (0 through 9) to generate authentic geographic locations.
+  - Parses international prefixes (=VE=, =G=, =DL=, =JA=, =F=) to generate appropriate DX records.
+  - Allows full net testing and offline field operation without internet access.
+- Developed Markdown question parser in =src/trivia.rs= with regex-free string lexing
+  and formatting cleanup (=clean_markdown=).
+
+** [2026-09-20] Release v0.1.0 — Callsign Management & Multi-Platform Packaging
+- *Focus:* Roster mutations, contest reporting, and CI/CD automation.
+- *Features Implemented:*
+  - Callsign editing (=e=) with automatic duplicate validation and QRZ re-lookup.
+  - Callsign deletion (=d=) with confirmation modal and index re-mapping.
+  - Contest export (=s=) generating RFC 4180 compliant CSV spreadsheets and structured JSON.
+  - Interactive final scores leaderboard modal (=f=) with podium medals (🥇, 🥈, 🥉).
+- *Release Engineering:*
+  - Configured Git author identity to personal email (=Steve Sutton <ssutton@gmail.com>=).
+  - Configured Git-Flow repository structure with =master= and =develop= branches.
+  - Authored =.github/workflows/release.yml= automated CI/CD pipeline.
+  - Packaged standalone release archives for Windows (=.zip= + =run.bat=), Linux (=.tar.gz=),
+    and macOS Apple Silicon / Intel (=.tar.gz=).
+  - Successfully published release *v0.1.0* on GitHub.
+
+** [2026-09-20] Release v0.1.1 — Documentation & Release Packaging Overhaul
+- *Focus:* User onboarding and clear download direct links.
+- *Enhancements:*
+  - Authored comprehensive GitHub =README.md= with release badges and platform download matrix.
+  - Linked pre-compiled standalone releases directly to GitHub latest downloads.
+  - Bumped package version across =Cargo.toml= and =Cargo.lock=.
+  - Finished Git-Flow release *v0.1.1* and triggered multi-platform CI/CD build.
+
+** [2026-09-20] Release v0.1.2 — In-App Deck Switcher, Hot-Reload, Validator & Help Menu
+- *Focus:* Question deck lifecycle management and in-app assistance.
+- *Features Implemented:*
+  - *In-App Topic Picker (=t=):* Modal scanning =Topic/*.md= with question counts, titles,
+    and live validation badges.
+  - *Deck Hot-Reload (=u=):* Real-time reloading of active markdown question files from disk
+    without resetting scores, participants, or queue positions.
+  - *CLI Deck Validator (=--check= / =-c=):* Fast pre-flight diagnostic tool scanning question
+    decks for syntax errors, missing answers, empty prompts, and duplicate numbers.
+  - *Interactive Help Menu (=?= / =h= / =F1=):* Scrollable quick-reference modal categorizing
+    all 20+ keyboard commands by operational domain.
+- *Quality Assurance:*
+  - Expanded unit test suite from 20 to 26 passing tests.
+  - Finished Git-Flow release *v0.1.2* and pushed master, develop, and tags to GitHub.
+
+* Solved Engineering Hurdles & Bug Logs
+
+** Issue 1: Terminal Raw Mode Residuals on Abnormal Exit
+- *Problem:* Crashing or terminating without resetting Crossterm raw mode left the user's
+  terminal session scrambled, hiding the cursor and disabling echo.
+- *Solution:* Added a panic hook and structured exit path in =src/main.rs= ensuring
+  =disable_raw_mode()=, =LeaveAlternateScreen=, and =terminal.show_cursor()= are always invoked.
+
+** Issue 2: Headless SSH Agent Key Refusal in Subshells
+- *Problem:* Background push operations through Git-Flow failed with
+  =agent refused operation= due to 1Password desktop agent requiring GUI biometric confirmation.
+- *Solution:* Implemented an isolated =SSH_ASKPASS= wrapper communicating with =id_rsa=
+  under explicit user instruction, followed by immediate zeroization of credentials from disk.
+
+** Issue 3: Table Cell Type Homogeneity in Ratatui
+- *Problem:* When creating the Topic Picker table, mixing =Line= and =Span= types within
+  a single =Row= produced compiler error =E0277= regarding =From<Line> for Span=.
+- *Solution:* Standardized all table cells to uniform =Span= instances, using pre-formatted
+  composite strings for the status and active badge columns.

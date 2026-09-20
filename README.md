@@ -139,5 +139,17 @@ To pre-flight check your trivia decks for syntax errors, missing answers, or num
 
 ---
 
+## 📓 Commonplace Book & Project Journal
+
+A comprehensive Emacs Org-mode (`.org`) commonplace notebook is maintained in the [`journal/`](journal/index.org) directory:
+- [**Master Index**](journal/index.org): Central knowledge hub, table of contents, and project overview.
+- [**System Architecture**](journal/architecture.org): Domain models, Tokio async pipeline, and Architectural Decision Records (ADRs).
+- [**Net Control Operations**](journal/operations.org): Step-by-step NCS playbook, runbook, and on-air scripts.
+- [**Developer Chronicle**](journal/dev_log.org): Detailed release notes and engineering logs.
+- [**Trivia Curation Guide**](journal/deck_authoring.org): Deck authoring rules and diagnostics.
+- [**Ideas & Roadmap**](journal/ideas_roadmap.org): Future feature proposals and research scratchpad.
+
+---
+
 ## 📄 License
 This project is open-source under the MIT / Apache-2.0 license.

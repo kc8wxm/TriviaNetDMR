@@ -1,0 +1,128 @@
+#+TITLE: TriviaNetDMR — Net Control Station (NCS) Operations & Playbook
+#+AUTHOR: Steve Sutton (KC8WXM)
+#+DATE: 2026-09-20
+#+STARTUP: showall
+#+OPTIONS: toc:2 num:t
+#+TAGS: { OPERATIONS(o) RUNBOOK(r) DMR(d) SCRIPTS(s) }
+
+* Net Control Operations Philosophy
+
+Running a live trivia net on amateur radio (especially digital voice modes like
+DMR, D-STAR, or System Fusion) requires balancing three critical priorities:
+1. *Audio Discipline:* Keeping transmissions crisp, waiting for repeater tails to drop, and preventing link timeouts.
+2. *Fair Participant Engagement:* Ensuring all check-ins receive equal airtime and answering opportunities regardless of callsign prefix or check-in order.
+3. *Engaging Presentation:* Prompting trivia questions clearly, giving operators sufficient time to key up, and sharing interesting Net Control facts to foster discussion.
+
+* TriviaNetDMR Scoring System
+
+The scoring model is designed to reward participation while honoring trivia knowledge:
+- *Check-in Point (1 pt):* Automatically awarded when an operator is checked into the roster. Encourages radio check-ins even if the operator is hesitant to answer questions.
+- *Trivia Answer Point (1 pt):* Awarded (=y=) when the operator provides a correct or close answer to the question. Deductible (=x=) if awarded in error.
+- *Bonus Point (1 pt):* Awarded (=b=) at Net Control's discretion for humorous, exceptionally clever, or insightful additional commentary. Deductible (=v=).
+- *Total Score:* Automatically calculated as =Points(Checkin) + Points(Trivia) + Points(Bonus)=.
+
+* Step-by-Step NCS Runbook
+
+** Phase 1: Pre-Net Setup (15 Minutes Before Net)
+1. *Select & Validate Question Deck:*
+   #+BEGIN_SRC bash
+     # Run pre-flight check to ensure the question file is error-free
+     ./TriviaNetDMR --check Topic/Questions-1.md
+   #+END_SRC
+2. *Configure QRZ Credentials (Optional):*
+   If live callbook lookup is desired:
+   #+BEGIN_SRC bash
+     export QRZ_USERNAME="KC8WXM"
+     export QRZ_PASSWORD="my_qrz_password"
+   #+END_SRC
+   Otherwise, let the app run in *Offline Mock Mode*.
+3. *Launch TriviaNetDMR:*
+   #+BEGIN_SRC bash
+     ./TriviaNetDMR
+   #+END_SRC
+4. *Verify Topic & Screen:*
+   - If you wish to change topics on the fly, press =t= to open the Deck Picker, select the desired theme, and press =Enter=.
+   - If you need a refresher on keyboard shortcuts, press =?= to view the Help Menu.
+
+** Phase 2: Opening the Net & Calling for Check-ins
+1. Key the radio and read the *Net Opening Script* (see template below).
+2. Announce the trivia theme for the session.
+3. Call for check-ins in groups (e.g. by call district, mobile stations, or open call).
+4. For each checking-in station:
+   - Press =c= to open the check-in dialog.
+   - Enter the callsign and press =Enter=.
+   - The operator appears immediately on screen and background QRZ lookup begins.
+   - Acknowledge the operator by name and city once QRZ data populates.
+
+** Phase 3: Conducting Trivia Rounds
+1. *Prompting the Question:*
+   - Ensure answer is hidden (=a= toggles visibility if you want to keep it private until revealed).
+   - Read the question clearly over the air. Repeat once for mobile stations.
+2. *Cycling the Queue:*
+   - The participant table indicates the active operator with the =▶= green cursor.
+   - Call on the active operator: /"Next up is Bradley, KE8WNV. Bradley, your answer for Round 1?"/
+   - After the operator responds:
+     - Press =y= if correct.
+     - Press =b= if they offered an entertaining bonus fact.
+   - Press =n=, =Enter=, or =↓= to advance to the next operator.
+3. *Ending the Round & Rotating:*
+   - When all participants in the queue have taken a turn, the status pane announces:
+     #+BEGIN_QUOTE
+     🏆 ROUND COMPLETED! 🏆 Press [r] for next round.
+     #+END_QUOTE
+   - Press =r= to rotate:
+     - Increments the round number.
+     - Shifts queue position (operator #2 becomes the new first turn).
+     - Advances to the next trivia question in the deck automatically.
+
+** Phase 4: Handling Late Check-ins & Corrections
+- *Late Check-ins:* Simply press =c= and enter their callsign. They are automatically added to the roster and placed at the end of the current rotation queue.
+- *Mistyped Callsigns:* Highlight the operator in turn, press =e=, enter the corrected callsign, and press =Enter=. Points are preserved and QRZ is re-queried.
+- *Dropouts / Early Sign-offs:* Press =d= to confirm deletion from the active queue.
+
+** Phase 5: Final Scores, Contest Export & Net Close
+1. Once all trivia rounds are complete, press =f= to open the *Interactive Final Scoreboard*.
+2. Announce the podium winners over the air:
+   - 🥇 First Place
+   - 🥈 Second Place
+   - 🥉 Third Place
+3. Press =s= to export contest standings:
+   - Select CSV (=contest_results.csv=) for spreadsheet archiving.
+   - Select JSON (=contest_results.json=) for web logging or DMR club archives.
+4. Read the *Net Closing Script*, return the repeater/talkgroup to regular amateur use, and press =q= to exit.
+
+* Standard Net Control Script Templates
+
+** On-Air Net Opening Script
+#+BEGIN_QUOTE
+"Calling all amateur radio operators. This is [CALLSIGN], [NAME], acting as Net
+Control Station for this evening's Amateur Radio Trivia Net.
+
+This net meets weekly to promote camaraderie, technical knowledge, and good
+operating practices across our DMR network. All licensed amateurs are warmly
+welcomed to participate.
+
+Tonight's trivia topic is: [TOPIC TITLE].
+
+Scoring is simple: You will receive one point automatically just for checking
+into the log, one point for each correct trivia answer, and optional bonus
+points for interesting commentary.
+
+We will now begin taking check-ins. Please transmit your callsign phonetically,
+your name, and your location. Stations wishing to check in, please call now."
+#+END_QUOTE
+
+** On-Air Net Closing Script
+#+BEGIN_QUOTE
+"This concludes this evening's session of the Amateur Radio Trivia Net!
+
+Congratulations to our top stations tonight:
+- In Third Place, taking the bronze: [CALLSIGN / NAME] with [SCORE] points!
+- In Second Place, taking the silver: [CALLSIGN / NAME] with [SCORE] points!
+- And in First Place, our Trivia Grand Champion: [CALLSIGN / NAME] with [SCORE] points!
+
+Thank you to everyone who checked in and shared an evening on the radio with us.
+This net is now closed. All amateur radio operators are invited to return this
+talkgroup and repeater system to normal amateur use. 73 to all, and have a great
+evening. This is [CALLSIGN] signing clear."
+#+END_QUOTE
