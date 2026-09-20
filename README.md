@@ -33,6 +33,9 @@ Pre-compiled, standalone binaries are automatically built for **Windows**, **Lin
 - **Asynchronous QRZ.com XML Lookups:** Non-blocking background lookups powered by `tokio`. Entering a callsign immediately appends the operator to the queue while name and city/state are retrieved seamlessly.
 - **Offline Region-Aware Mock Mode:** When run without QRZ credentials, the application automatically enters offline mode, dynamically generating realistic operator profiles based on US call districts (1–0) and international prefixes (`VE`, `G`, `DL`, `JA`, `F`, etc.).
 - **Markdown Question Decks:** Automatically parses trivia decks (such as `Topic/Questions.md`) into questions, answers, and Net Control facts, with answer reveal toggling (`a`) and question navigation (`[` / `]`).
+- **In-App Deck Picker (`t`):** Browse, validate, and switch trivia question decks on the fly directly within the TUI without restarting the application.
+- **Hot-Reload Decks (`u`):** Edit questions in your favorite text editor during preparation and instantly hot-reload the deck from disk without losing participant queues or scores.
+- **CLI & In-App Deck Validator (`--check`):** Fast pre-flight diagnostic tool to scan and validate Markdown question decks for formatting errors, missing answers, or numbering gaps.
 - **Rotating Queue:** Automatically rotates queue order at the start of each round (`r`), giving every participant a fair opportunity to answer first.
 - **Granular Scoring:** Tracks automatic check-in points (1pt), trivia answer points (1pt per correct answer), and bonus points (1pt for best/interesting answer).
 - **Callsign Management:** Edit mistyped callsigns on the fly (`e`) with automatic QRZ re-lookup, or delete operators (`d`) from the net and queue with safe confirmation.
@@ -52,6 +55,8 @@ The application features intuitive, single-key shortcuts:
 | `d` | **Delete Operator** | Prompts confirmation to remove the active operator from the net and queue. |
 | `s` | **Export Contest** | Opens modal to export contest standings to CSV or JSON. Press `Tab` to switch format. |
 | `f` | **Show Final Scores** | Opens the interactive final scoreboard and contest standings modal. |
+| `t` | **Browse & Switch Decks** | Opens the topic picker modal to choose and switch trivia decks (`Topic/*.md`). |
+| `u` | **Hot-Reload Deck** | Reloads current active trivia markdown deck from disk without losing scores. |
 | `n`, `Enter`, or `↓` | **Next Turn** | Advances the active turn to the next operator in the queue. |
 | `p` or `↑` | **Prev Turn** | Moves the active turn back to the previous operator (for score corrections). |
 | `y` | **Award Correct Answer** | Adds `1 pt` to the active operator's trivia score. |
@@ -63,6 +68,7 @@ The application features intuitive, single-key shortcuts:
 | `[` or `←` | **Previous Question** | Manually moves back to the previous trivia question. |
 | `]` or `→` | **Next Question** | Manually advances to the next trivia question. |
 | `Backspace` or `k` | **Clear Session Log** | Prompts confirmation to clear session and reset all scores. |
+| `?` or `h` | **Help Menu** | Opens popup reference modal displaying all keyboard shortcuts and commands. |
 | `q` or `Esc` | **Quit** | Restores the terminal to normal state and exits (printing final scores). |
 
 ---
@@ -105,6 +111,30 @@ cargo test
 
 # Compile and launch the release build
 cargo run --release
+```
+
+---
+
+## 🔍 Deck Validator & Custom Questions
+
+You can create and organize your own custom trivia decks simply by dropping Markdown files into the `Topic/` folder. Format questions using standard `Question:`, `Answer:`, and optional `Net Control Fact:` lines:
+
+```markdown
+### **10 Trivia Questions & Answers: Astronomy**
+
+1. **Question:** What is the closest planet to the Sun?
+   * **Answer:** Mercury.
+   * **Net Control Fact:** Mercury has no atmosphere and extreme temperature swings.
+```
+
+To pre-flight check your trivia decks for syntax errors, missing answers, or numbering issues without launching the full TUI:
+
+```bash
+# Validate all decks in Topic/ directory
+./TriviaNetDMR --check
+
+# Validate a specific deck file
+./TriviaNetDMR --check Topic/Questions-2.md
 ```
 
 ---

@@ -607,12 +607,33 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     control_spans.extend(vec![
         Span::styled(
+            " [t]",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" Decks "),
+        Span::styled(
+            " [u]",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" Reload "),
+        Span::styled(
             " [Backspace]",
             Style::default()
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         ),
         Span::raw(" Clear "),
+        Span::styled(
+            " [?]",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" Help "),
         Span::styled(
             " [q]",
             Style::default()
@@ -1097,4 +1118,357 @@ pub fn draw(f: &mut Frame, app: &App) {
         let hint_p = Paragraph::new(Line::from(hint_spans));
         f.render_widget(hint_p, popup_chunks[2]);
     }
+
+    // ==========================================
+    // 7. TOPIC PICKER MODAL
+    // ==========================================
+    if let InputMode::TopicPicker = app.input_mode {
+        let popup_area = centered_rect(75, 55, size);
+        f.render_widget(Clear, popup_area);
+
+        let block = Block::default()
+            .title(" 📚 Select Trivia Deck ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::LightCyan));
+
+        let inner_layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(2), // Intro
+                Constraint::Min(5),    // Table
+                Constraint::Length(2), // Footer
+            ])
+            .margin(1)
+            .split(popup_area);
+
+        f.render_widget(block, popup_area);
+
+        let intro_p = Paragraph::new(Line::from(vec![
+            Span::styled(
+                " Browse and switch trivia decks in ",
+                Style::default().fg(Color::Gray),
+            ),
+            Span::styled(
+                "Topic/",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                " or active directory:",
+                Style::default().fg(Color::Gray),
+            ),
+        ]));
+        f.render_widget(intro_p, inner_layout[0]);
+
+        if app.available_decks.is_empty() {
+            let empty_p = Paragraph::new(vec![
+                Line::raw(""),
+                Line::from(Span::styled(
+                    "  ⚠️ No trivia deck files (*.md) found.",
+                    Style::default().fg(Color::LightRed),
+                )),
+                Line::from(Span::styled(
+                    "  Place Markdown files with questions in the Topic/ folder.",
+                    Style::default().fg(Color::Gray),
+                )),
+            ]);
+            f.render_widget(empty_p, inner_layout[1]);
+        } else {
+            let header_cells = [
+                " ",
+                "File",
+                "Topic Title",
+                "Questions",
+                "Validation Status",
+            ]
+            .iter()
+            .map(|h| {
+                Span::styled(
+                    *h,
+                    Style::default()
+                        .fg(Color::LightCyan)
+                        .add_modifier(Modifier::BOLD),
+                )
+            });
+            let header_row = Row::new(header_cells).height(1).bottom_margin(1);
+
+            let mut rows = Vec::new();
+            for (idx, deck) in app.available_decks.iter().enumerate() {
+                let is_selected = idx == app.topic_picker_index;
+                let is_active_deck = app.current_topic_path.as_ref().map_or(false, |p| {
+                    p == &deck.file_path || p == &deck.filename || p.ends_with(&deck.filename)
+                });
+
+                let cursor_icon = if is_selected { " ▶ " } else { "   " };
+
+                let (status_text, status_style) = if deck.is_valid() && deck.issues.is_empty() {
+                    ("✔ Valid (clean)", Style::default().fg(Color::LightGreen))
+                } else if deck.is_valid() {
+                    (
+                        "✔ Valid (warnings)",
+                        Style::default().fg(Color::LightYellow),
+                    )
+                } else {
+                    (
+                        "✘ Invalid (errors)",
+                        Style::default()
+                            .fg(Color::LightRed)
+                            .add_modifier(Modifier::BOLD),
+                    )
+                };
+
+                let row_style = if is_selected {
+                    Style::default()
+                        .bg(Color::Rgb(25, 45, 50))
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default()
+                };
+
+                let title_display = if deck.title.len() > 30 {
+                    format!("{}...", &deck.title[..27])
+                } else {
+                    deck.title.clone()
+                };
+
+                let active_suffix = if is_active_deck { " [ACTIVE]" } else { "" };
+                let full_status = format!("{}{}", status_text, active_suffix);
+
+                let row_cells = vec![
+                    Span::styled(
+                        cursor_icon,
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        format!("{:<18}", deck.filename),
+                        Style::default().fg(Color::White),
+                    ),
+                    Span::styled(
+                        format!("{:<30}", title_display),
+                        Style::default().fg(Color::LightCyan),
+                    ),
+                    Span::styled(
+                        format!(" {:^8} ", format!("{} Qs", deck.question_count)),
+                        Style::default().fg(Color::White),
+                    ),
+                    Span::styled(
+                        full_status,
+                        if is_active_deck && deck.is_valid() {
+                            Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD)
+                        } else {
+                            status_style
+                        },
+                    ),
+                ];
+
+                let row = Row::new(row_cells).style(row_style).height(1);
+                rows.push(row);
+            }
+
+            let table = Table::new(
+                rows,
+                [
+                    Constraint::Length(4),  // Cursor
+                    Constraint::Length(19), // File
+                    Constraint::Min(25),    // Topic Title
+                    Constraint::Length(10), // Questions
+                    Constraint::Length(26), // Status & Active
+                ],
+            )
+            .header(header_row);
+
+            f.render_widget(table, inner_layout[1]);
+        }
+
+        // Footer controls hint
+        let footer_spans = vec![
+            Span::styled(
+                " [↑/↓/j/k]",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" Navigate   "),
+            Span::styled(
+                " [Enter]",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" Switch Deck   "),
+            Span::styled(
+                " [Esc/q]",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" Cancel "),
+        ];
+        let footer_p = Paragraph::new(Line::from(footer_spans));
+        f.render_widget(footer_p, inner_layout[2]);
+    }
+
+    // ==========================================
+    // 8. HELP MENU MODAL
+    // ==========================================
+    if let InputMode::HelpMenu = app.input_mode {
+        let popup_area = centered_rect(82, 75, size);
+        f.render_widget(Clear, popup_area);
+
+        let block = Block::default()
+            .title(" 📖 Keyboard Shortcuts & Commands ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Yellow));
+
+        let inner_layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(2), // Subtitle
+                Constraint::Min(6),    // Table
+                Constraint::Length(2), // Footer controls
+            ])
+            .margin(1)
+            .split(popup_area);
+
+        f.render_widget(block, popup_area);
+
+        let subtitle_p = Paragraph::new(Line::from(vec![
+            Span::styled(
+                "TriviaNetDMR Quick Reference — ",
+                Style::default()
+                    .fg(Color::LightCyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                "All single-key commands and operational shortcuts:",
+                Style::default().fg(Color::Gray),
+            ),
+        ]));
+        f.render_widget(subtitle_p, inner_layout[0]);
+
+        let shortcuts = [
+            ("c", "Check-in Operator", "Roster", "Opens modal to enter callsign & fetch QRZ info"),
+            ("e", "Edit Callsign", "Roster", "Edit active operator's callsign & re-query QRZ"),
+            ("d", "Delete Operator", "Roster", "Remove active operator from queue & session"),
+            ("n, ↵, ↓", "Next Turn", "Queue", "Advance active turn to next operator in queue"),
+            ("p, ↑", "Prev Turn", "Queue", "Move turn back to previous operator (for corrections)"),
+            ("r", "Rotate Round", "Queue", "Finish round, rotate queue & sync next question"),
+            ("y", "Award Trivia (+1)", "Scoring", "Add 1 pt to active operator's trivia score"),
+            ("x", "Deduct Trivia (-1)", "Scoring", "Deduct 1 pt from active operator's trivia score"),
+            ("b", "Award Bonus (+1)", "Scoring", "Add 1 pt to active operator's bonus score"),
+            ("v", "Deduct Bonus (-1)", "Scoring", "Deduct 1 pt from active operator's bonus score"),
+            ("a", "Toggle Answer", "Trivia", "Show or hide canonical answer & Net Control fact"),
+            ("[ , ←", "Prev Question", "Trivia", "Manually navigate back to previous trivia question"),
+            ("] , →", "Next Question", "Trivia", "Manually advance to next trivia question"),
+            ("t", "Browse Decks", "Trivia", "Open deck picker to switch topic from Topic/*.md"),
+            ("u", "Hot-Reload Deck", "Trivia", "Reload active markdown deck from disk without losing scores"),
+            ("f", "Final Scores", "Contest", "Interactive standings leaderboard with podium ranks"),
+            ("s", "Export Contest", "Contest", "Save contest results to RFC 4180 CSV or JSON file"),
+            ("Backspace, k", "Clear Session", "Session", "Reset all scores and participants (with confirmation)"),
+            ("?, h, F1", "Help Menu", "System", "Display this keyboard shortcut reference modal"),
+            ("q, Esc", "Quit / Close", "System", "Close active popup modal or exit application"),
+        ];
+
+        let visible_capacity = inner_layout[1].height.saturating_sub(2) as usize;
+        let scroll = if shortcuts.len() > visible_capacity {
+            app.help_scroll.min(shortcuts.len().saturating_sub(visible_capacity))
+        } else {
+            0
+        };
+        let visible_slice = &shortcuts[scroll..std::cmp::min(scroll + visible_capacity, shortcuts.len())];
+
+        let header_cells = ["Key(s)", "Command", "Category", "Description"]
+            .iter()
+            .map(|h| {
+                Span::styled(
+                    *h,
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )
+            });
+        let header_row = Row::new(header_cells).height(1).bottom_margin(1);
+
+        let mut rows = Vec::new();
+        for (key, cmd, cat, desc) in visible_slice {
+            let cat_color = match *cat {
+                "Roster" => Color::LightGreen,
+                "Queue" => Color::LightCyan,
+                "Scoring" => Color::Green,
+                "Trivia" => Color::LightMagenta,
+                "Contest" => Color::LightYellow,
+                "Session" => Color::LightRed,
+                _ => Color::Gray,
+            };
+
+            let row_cells = vec![
+                Span::styled(
+                    format!(" {:<14}", key),
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format!("{:<20}", cmd),
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(format!(" {:<10} ", cat), Style::default().fg(cat_color)),
+                Span::styled(*desc, Style::default().fg(Color::Gray)),
+            ];
+            rows.push(Row::new(row_cells).height(1));
+        }
+
+        let help_table = Table::new(
+            rows,
+            [
+                Constraint::Length(15), // Key
+                Constraint::Length(22), // Command
+                Constraint::Length(12), // Category
+                Constraint::Min(30),    // Description
+            ],
+        )
+        .header(header_row);
+
+        f.render_widget(help_table, inner_layout[1]);
+
+        // Footer hint
+        let mut footer_spans = vec![
+            Span::styled(
+                " [Esc / Enter / ? / q]",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" Close Help   "),
+        ];
+        if shortcuts.len() > visible_capacity {
+            footer_spans.extend(vec![
+                Span::styled(
+                    " [↑/↓/PgUp/PgDn]",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(" Scroll   "),
+                Span::styled(
+                    format!(
+                        "(Showing {}-{} of {})",
+                        scroll + 1,
+                        std::cmp::min(scroll + visible_capacity, shortcuts.len()),
+                        shortcuts.len()
+                    ),
+                    Style::default().fg(Color::LightCyan),
+                ),
+            ]);
+        }
+        let footer_p = Paragraph::new(Line::from(footer_spans));
+        f.render_widget(footer_p, inner_layout[2]);
+    }
 }
+
+

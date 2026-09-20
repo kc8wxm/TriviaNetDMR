@@ -25,6 +25,17 @@ pub enum AppEvent {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // 0. CLI Validator Mode (--check / --validate / -c)
+    let args: Vec<String> = std::env::args().collect();
+    if args
+        .iter()
+        .any(|a| a == "--check" || a == "--validate" || a == "-c")
+    {
+        let target = args.iter().skip(1).find(|a| !a.starts_with('-')).cloned();
+        let exit_code = run_validator(target.as_deref());
+        std::process::exit(exit_code);
+    }
+
     // 1. Terminal Initialization
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -48,8 +59,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Load trivia questions (CLI arg -> Topic/Questions.md -> Topic/Questions-1.md -> Questions.md -> Questions-1.md)
-    let args: Vec<String> = std::env::args().collect();
-    let topic_path = if args.len() > 1 {
+    let topic_path = if args.len() > 1 && !args[1].starts_with('-') {
         Some(args[1].clone())
     } else if std::path::Path::new("Topic/Questions.md").exists() {
         Some("Topic/Questions.md".to_string())
@@ -75,6 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         (app.round_number - 1).min(topic.questions.len() - 1);
                 }
                 app.trivia_topic = Some(topic);
+                app.current_topic_path = Some(path);
             }
             Err(e) => {
                 app.error_message = Some(format!("Could not load {}: {}", path, e));
@@ -261,6 +272,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         KeyCode::Char(']') | KeyCode::Right => {
                             app.next_question();
                             state_changed = true;
+                        }
+                        KeyCode::Char('t') | KeyCode::Char('T') => {
+                            app.open_topic_picker();
+                        }
+                        KeyCode::Char('u') | KeyCode::Char('U') => {
+                            match app.reload_current_topic() {
+                                Ok(msg) => {
+                                    app.status_message = Some(msg);
+                                    app.error_message = None;
+                                    state_changed = true;
+                                }
+                                Err(err) => {
+                                    app.error_message = Some(err);
+                                }
+                            }
+                        }
+                        KeyCode::Char('?')
+                        | KeyCode::Char('h')
+                        | KeyCode::Char('H')
+                        | KeyCode::F(1) => {
+                            app.help_scroll = 0;
+                            app.input_mode = InputMode::HelpMenu;
                         }
                         KeyCode::Backspace | KeyCode::Char('k') => {
                             app.input_mode = InputMode::ClearConfirm;
@@ -479,6 +512,65 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         _ => {}
                     },
+
+                    // --- INPUT MODE: TOPIC PICKER ---
+                    InputMode::TopicPicker => match key.code {
+                        KeyCode::Up | KeyCode::Char('k') | KeyCode::Char('p') => {
+                            if app.topic_picker_index > 0 {
+                                app.topic_picker_index -= 1;
+                            }
+                        }
+                        KeyCode::Down | KeyCode::Char('j') | KeyCode::Char('n') => {
+                            if !app.available_decks.is_empty()
+                                && app.topic_picker_index + 1 < app.available_decks.len()
+                            {
+                                app.topic_picker_index += 1;
+                            }
+                        }
+                        KeyCode::Enter => {
+                            match app.select_picked_topic() {
+                                Ok(msg) => {
+                                    app.status_message = Some(msg);
+                                    app.error_message = None;
+                                    state_changed = true;
+                                }
+                                Err(err) => {
+                                    app.error_message = Some(err);
+                                }
+                            }
+                        }
+                        KeyCode::Esc | KeyCode::Char('q') => {
+                            app.input_mode = InputMode::Normal;
+                        }
+                        _ => {}
+                    },
+
+                    // --- INPUT MODE: HELP MENU ---
+                    InputMode::HelpMenu => match key.code {
+                        KeyCode::Esc
+                        | KeyCode::Enter
+                        | KeyCode::Char('?')
+                        | KeyCode::Char('h')
+                        | KeyCode::Char('H')
+                        | KeyCode::Char('q') => {
+                            app.input_mode = InputMode::Normal;
+                        }
+                        KeyCode::Up | KeyCode::Char('k') => {
+                            if app.help_scroll > 0 {
+                                app.help_scroll -= 1;
+                            }
+                        }
+                        KeyCode::Down | KeyCode::Char('j') => {
+                            app.help_scroll += 1;
+                        }
+                        KeyCode::PageUp => {
+                            app.help_scroll = app.help_scroll.saturating_sub(5);
+                        }
+                        KeyCode::PageDown => {
+                            app.help_scroll += 5;
+                        }
+                        _ => {}
+                    },
                 },
                 AppEvent::Tick => {
                     // Can do periodic tasks here if needed
@@ -545,3 +637,98 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+/// Standalone CLI deck validator mode (--check / --validate / -c)
+fn run_validator(target: Option<&str>) -> i32 {
+    println!("🔍 TriviaNetDMR Deck Validator\n");
+
+    let validations = match target {
+        Some(path) => {
+            let p = std::path::Path::new(path);
+            if p.is_dir() {
+                println!("Scanning directory: {}", path);
+                trivia::scan_and_validate_directory(p)
+            } else if p.is_file() {
+                println!("Validating single file: {}", path);
+                vec![trivia::validate_deck(p)]
+            } else {
+                eprintln!("Error: Target path does not exist: {}", path);
+                return 1;
+            }
+        }
+        None => {
+            println!("Scanning default locations (Topic/ directory and current path)...");
+            trivia::find_all_deck_files()
+        }
+    };
+
+    if validations.is_empty() {
+        println!("⚠️  No Markdown trivia deck files (*.md) found to validate.");
+        return 0;
+    }
+
+    let mut total_errors = 0;
+    let mut total_warnings = 0;
+    let mut valid_decks = 0;
+
+    for val in &validations {
+        println!("--------------------------------------------------");
+        println!("📄 File:      {}", val.file_path);
+        println!("   Topic:     \"{}\"", val.title);
+        println!("   Questions: {}", val.question_count);
+
+        if val.is_valid() && val.issues.is_empty() {
+            println!("   ✔ Status:    PERFECT (No issues detected)");
+            valid_decks += 1;
+        } else if val.is_valid() {
+            println!(
+                "   ✔ Status:    VALID (with {} warning{})",
+                val.warning_count(),
+                if val.warning_count() == 1 { "" } else { "s" }
+            );
+            valid_decks += 1;
+        } else {
+            println!(
+                "   ✘ Status:    INVALID ({} error{}, {} warning{})",
+                val.error_count(),
+                if val.error_count() == 1 { "" } else { "s" },
+                val.warning_count(),
+                if val.warning_count() == 1 { "" } else { "s" }
+            );
+        }
+
+        for issue in &val.issues {
+            match issue.level {
+                trivia::IssueLevel::Error => {
+                    total_errors += 1;
+                    if let Some(q) = issue.question_number {
+                        println!("     ✘ ERROR   [Q{}]: {}", q, issue.message);
+                    } else {
+                        println!("     ✘ ERROR:  {}", issue.message);
+                    }
+                }
+                trivia::IssueLevel::Warning => {
+                    total_warnings += 1;
+                    if let Some(q) = issue.question_number {
+                        println!("     ⚠ WARNING [Q{}]: {}", q, issue.message);
+                    } else {
+                        println!("     ⚠ WARNING: {}", issue.message);
+                    }
+                }
+            }
+        }
+        println!();
+    }
+
+    println!("==================================================");
+    println!(
+        "Summary: {} deck(s) scanned | {} valid | {} error(s) | {} warning(s)",
+        validations.len(),
+        valid_decks,
+        total_errors,
+        total_warnings
+    );
+
+    if total_errors > 0 { 1 } else { 0 }
+}
+
