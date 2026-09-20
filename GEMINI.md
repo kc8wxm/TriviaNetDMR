@@ -7,17 +7,19 @@ TriviaNetDMR is a modern, highly interactive, and visually polished Terminal Use
 - **Asynchronous Background Lookups:** Powered by `tokio`. Checking in a callsign immediately appends them to the queue and triggers a non-blocking background lookup, ensuring the user interface remains completely smooth and responsive without freezing.
 - **QRZ.com XML API Integration:** Automatically logs in, caches the session key, and fetches operator names and locations (city/state/country) on the fly.
 - **Region-Aware Mock Fallback:** When run without QRZ credentials, the app enters a highly realistic offline mock mode. It dynamically parses callsign prefixes (both US regions 1-0 and international prefixes like `VE`, `G`, `DL`, `JA`, `F`) to generate appropriate names and locations.
+- **Trivia Question & Answer Prompter:** Automatically parses and displays trivia decks from Markdown files (such as `Topic/Questions-1.md`). Shows current question prompt, canonical answer, and Net Control facts with answer reveal toggling (`a`) and question navigation (`[` / `]`), synced to rounds.
 - **Trivia Queue Rotation:** Automatically rotates the active list of participants after each round, ensuring a fair starting position for all check-ins, while placing late check-ins at the end of the rotation.
 - **Granular Scoring:** Tracks automatic check-in points (1pt), trivia answer points (1pt per correct answer), and custom bonus points (1pt for best/interesting answers) per participant.
 
 ---
 
 ## 🛠 Project Architecture
-The codebase is structured into four highly focused modules:
-1. `src/state.rs`: Holds the pure domain models (`Participant`, `App`, `InputMode`), scoring mutations, and the queue rotation logic. It contains comprehensive unit tests verifying rotation offsets and late arrivals.
-2. `src/qrz.rs`: Features the asynchronous `QrzClient`. It manages session-cached authentication, XML response parsing using `roxmltree`, and the smart, region-aware mock generator.
-3. `src/ui.rs`: Handles the layout rendering using `ratatui`. It draws a multi-column header (with a live round indicator and API status), a beautiful data table for participants, an operator detail card, net summary stats, and a modal popup dialog for check-ins.
-4. `src/main.rs`: Coordinates the startup, crossterm raw-mode initialization, the multi-producer single-consumer (`mpsc`) event router, and handles the graceful shutdown/terminal restoration.
+The codebase is structured into five highly focused modules:
+1. `src/state.rs`: Holds the pure domain models (`Participant`, `App`, `InputMode`), scoring mutations, queue rotation, and trivia question navigation. Contains unit tests for rotation offsets and late arrivals.
+2. `src/trivia.rs`: Loads and parses Markdown question decks into structured topics, questions, answers, and Net Control facts, with robust Markdown syntax cleaning.
+3. `src/qrz.rs`: Features the asynchronous `QrzClient`. Manages session-cached authentication, XML response parsing using `roxmltree`, and the region-aware mock generator.
+4. `src/ui.rs`: Handles the layout rendering using `ratatui`. Draws the multi-column header (with round & question indicators), trivia question/answer banner, participant table, operator detail card, net summary stats, and check-in modal.
+5. `src/main.rs`: Coordinates startup, CLI argument handling (e.g. specifying question decks), crossterm raw-mode initialization, event routing, and graceful shutdown.
 
 ---
 
@@ -68,5 +70,8 @@ The application features intuitive single-key controls:
 | `x` | **Deduct Correct Answer** | Deduct `1 pt` from the active operator's trivia score (for corrections). |
 | `b` | **Award Bonus Point**| Adds `1 pt` to the active operator's bonus score. |
 | `v` | **Deduct Bonus Point** | Deduct `1 pt` from the active operator's bonus score (for corrections). |
-| `r` | **Rotate Round** | Finishes the current round, increments round number, and rotates the queue left by 1 (the current starter goes to the end). |
+| `r` | **Rotate Round** | Finishes the current round, increments round number, rotates queue, and advances question. |
+| `a` | **Toggle Answer Visibility** | Toggles hiding/revealing the answer and Net Control fact. |
+| `[` | **Previous Question** | Manually moves back to the previous trivia question. |
+| `]` | **Next Question** | Manually advances to the next trivia question. |
 | `q` or `Esc` | **Quit** | Restores the terminal to its original state and exits the application. |

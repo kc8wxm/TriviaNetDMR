@@ -1,5 +1,6 @@
 pub mod qrz;
 pub mod state;
+pub mod trivia;
 pub mod ui;
 
 use crate::state::{App, InputMode};
@@ -43,6 +44,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             app.error_message = Some(format!("Failed to load session: {}", e));
         } else {
             loaded_from_file = true;
+        }
+    }
+
+    // Load trivia questions (CLI arg -> Topic/Questions-1.md -> Questions-1.md)
+    let args: Vec<String> = std::env::args().collect();
+    let topic_path = if args.len() > 1 {
+        Some(args[1].clone())
+    } else if std::path::Path::new("Topic/Questions-1.md").exists() {
+        Some("Topic/Questions-1.md".to_string())
+    } else if std::path::Path::new("Questions-1.md").exists() {
+        Some("Questions-1.md".to_string())
+    } else {
+        None
+    };
+
+    if let Some(path) = topic_path {
+        match trivia::TriviaTopic::load_from_file(&path) {
+            Ok(topic) => {
+                // If round > 1 and current_question_index is 0 (e.g. from restored legacy session), sync it
+                if app.round_number > 1
+                    && app.current_question_index == 0
+                    && !topic.questions.is_empty()
+                {
+                    app.current_question_index =
+                        (app.round_number - 1).min(topic.questions.len() - 1);
+                }
+                app.trivia_topic = Some(topic);
+            }
+            Err(e) => {
+                app.error_message = Some(format!("Could not load {}: {}", path, e));
+            }
         }
     }
 
@@ -186,6 +218,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         KeyCode::Char('r') => {
                             app.next_round();
+                            state_changed = true;
+                        }
+                        KeyCode::Char('a') | KeyCode::Char('A') => {
+                            app.toggle_show_answer();
+                            state_changed = true;
+                        }
+                        KeyCode::Char('[') => {
+                            app.prev_question();
+                            state_changed = true;
+                        }
+                        KeyCode::Char(']') => {
+                            app.next_question();
                             state_changed = true;
                         }
                         KeyCode::Backspace | KeyCode::Char('k') => {

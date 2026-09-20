@@ -31,20 +31,33 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 pub fn draw(f: &mut Frame, app: &App) {
     let size = f.area();
 
-    // Main Layout (Header, Body, Footer)
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3), // Header
-            Constraint::Min(10),   // Main content
-            Constraint::Length(3), // Footer / Controls
-        ])
-        .split(size);
+    // Main Layout (Header, Trivia Q&A if present, Body, Footer)
+    let (header_chunk, trivia_chunk, body_chunk, footer_chunk) = if app.trivia_topic.is_some() {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3), // Header
+                Constraint::Length(7), // Trivia Q&A Card
+                Constraint::Min(8),    // Main content
+                Constraint::Length(3), // Footer / Controls
+            ])
+            .split(size);
+        (chunks[0], Some(chunks[1]), chunks[2], chunks[3])
+    } else {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3), // Header
+                Constraint::Min(10),   // Main content
+                Constraint::Length(3), // Footer / Controls
+            ])
+            .split(size);
+        (chunks[0], None, chunks[1], chunks[2])
+    };
 
     // ==========================================
     // 1. HEADER
     // ==========================================
-    let header_chunk = chunks[0];
     let header_layout = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
@@ -69,7 +82,7 @@ pub fn draw(f: &mut Frame, app: &App) {
             .border_style(Style::default().fg(Color::DarkGray)),
     );
 
-    let round_status_p = Paragraph::new(Line::from(vec![
+    let mut round_spans = vec![
         Span::styled(" Round: ", Style::default().fg(Color::Gray)),
         Span::styled(
             format!("{}", app.round_number),
@@ -77,8 +90,24 @@ pub fn draw(f: &mut Frame, app: &App) {
                 .fg(Color::LightCyan)
                 .add_modifier(Modifier::BOLD),
         ),
-    ]))
-    .block(
+    ];
+    if let Some(topic) = &app.trivia_topic {
+        let total_q = topic.questions.len();
+        let q_display = if total_q > 0 {
+            format!("{}/{}", (app.current_question_index + 1).min(total_q), total_q)
+        } else {
+            "0/0".to_string()
+        };
+        round_spans.push(Span::styled("  |  Q: ", Style::default().fg(Color::Gray)));
+        round_spans.push(Span::styled(
+            q_display,
+            Style::default()
+                .fg(Color::LightYellow)
+                .add_modifier(Modifier::BOLD),
+        ));
+    }
+
+    let round_status_p = Paragraph::new(Line::from(round_spans)).block(
         Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::DarkGray)),
@@ -104,9 +133,114 @@ pub fn draw(f: &mut Frame, app: &App) {
     f.render_widget(api_p, header_layout[2]);
 
     // ==========================================
-    // 2. MAIN BODY
+    // 2. TRIVIA QUESTION & ANSWER CARD (IF LOADED)
     // ==========================================
-    let body_chunk = chunks[1];
+    if let Some(q_area) = trivia_chunk {
+        let (title, lines) = if let Some(q) = app.current_question() {
+            let total_q = app
+                .trivia_topic
+                .as_ref()
+                .map(|t| t.questions.len())
+                .unwrap_or(0);
+            let topic_name = app
+                .trivia_topic
+                .as_ref()
+                .map(|t| t.title.as_str())
+                .unwrap_or("Trivia Net");
+            let card_title = format!(" 🎯 Question {}/{} — {} ", q.number, total_q, topic_name);
+
+            let mut card_lines = vec![Line::from(vec![
+                Span::styled(
+                    " Q: ",
+                    Style::default()
+                        .fg(Color::LightCyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    &q.question,
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ])];
+
+            if app.show_answer {
+                card_lines.push(Line::from(vec![
+                    Span::styled(
+                        " A: ",
+                        Style::default()
+                            .fg(Color::LightGreen)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        &q.answer,
+                        Style::default()
+                            .fg(Color::LightGreen)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ]));
+
+                if let Some(fact) = &q.fact {
+                    card_lines.push(Line::from(vec![
+                        Span::styled(
+                            " 💡 Fact: ",
+                            Style::default()
+                                .fg(Color::Yellow)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                        Span::styled(fact, Style::default().fg(Color::Gray)),
+                    ]));
+                }
+            } else {
+                card_lines.push(Line::from(vec![
+                    Span::styled(
+                        " A: ",
+                        Style::default()
+                            .fg(Color::DarkGray)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        "[Answer Hidden — Press 'a' to reveal]",
+                        Style::default()
+                            .fg(Color::DarkGray)
+                            .add_modifier(Modifier::ITALIC),
+                    ),
+                ]));
+            }
+
+            (card_title, card_lines)
+        } else {
+            let total_q = app
+                .trivia_topic
+                .as_ref()
+                .map(|t| t.questions.len())
+                .unwrap_or(0);
+            let card_title = " 🎯 Trivia Net ".to_string();
+            let card_lines = vec![Line::from(Span::styled(
+                format!(
+                    " All {} questions completed! Press [r] to rotate round or [ [ ] to review.",
+                    total_q
+                ),
+                Style::default().fg(Color::LightYellow),
+            ))];
+            (card_title, card_lines)
+        };
+
+        let trivia_block = Block::default()
+            .title(title)
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::LightMagenta));
+
+        let trivia_p = Paragraph::new(lines)
+            .block(trivia_block)
+            .wrap(Wrap { trim: true });
+
+        f.render_widget(trivia_p, q_area);
+    }
+
+    // ==========================================
+    // 3. MAIN BODY
+    // ==========================================
     let body_layout = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
@@ -198,12 +332,14 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     // -- Right side: Details & Status --
     let right_rect = body_layout[1];
+    let details_constraints = if right_rect.height >= 16 {
+        [Constraint::Length(11), Constraint::Min(4)]
+    } else {
+        [Constraint::Percentage(60), Constraint::Percentage(40)]
+    };
     let details_layout = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(11), // Selected Operator Card
-            Constraint::Min(4),     // Net Stats / Round Status block
-        ])
+        .constraints(details_constraints)
         .split(right_rect);
 
     // Operator Detail Card
@@ -373,10 +509,9 @@ pub fn draw(f: &mut Frame, app: &App) {
     f.render_widget(summary_p, summary_rect);
 
     // ==========================================
-    // 3. FOOTER
+    // 4. FOOTER
     // ==========================================
-    let footer_chunk = chunks[2];
-    let controls_p = Paragraph::new(Line::from(vec![
+    let mut control_spans = vec![
         Span::styled(
             " [c]",
             Style::default()
@@ -390,42 +525,64 @@ pub fn draw(f: &mut Frame, app: &App) {
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::raw(" Next Turn "),
+        Span::raw(" Next "),
         Span::styled(
             " [p]",
             Style::default()
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::raw(" Prev Turn "),
+        Span::raw(" Prev "),
         Span::styled(
             " [y]",
             Style::default()
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::raw(" Correct (+1pt) "),
+        Span::raw(" Correct "),
         Span::styled(
             " [b]",
             Style::default()
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::raw(" Bonus (+1pt) "),
+        Span::raw(" Bonus "),
         Span::styled(
             " [r]",
             Style::default()
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::raw(" Rotate Round "),
+        Span::raw(" Rotate "),
+    ];
+
+    if app.trivia_topic.is_some() {
+        control_spans.extend(vec![
+            Span::styled(
+                " [a]",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" Ans Toggle "),
+            Span::styled(
+                " [ [ / ] ]",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" Q Nav "),
+        ]);
+    }
+
+    control_spans.extend(vec![
         Span::styled(
             " [Backspace]",
             Style::default()
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::raw(" Clear Log "),
+        Span::raw(" Clear "),
         Span::styled(
             " [q]",
             Style::default()
@@ -433,8 +590,9 @@ pub fn draw(f: &mut Frame, app: &App) {
                 .add_modifier(Modifier::BOLD),
         ),
         Span::raw(" Quit "),
-    ]))
-    .block(
+    ]);
+
+    let controls_p = Paragraph::new(Line::from(control_spans)).block(
         Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::DarkGray)),

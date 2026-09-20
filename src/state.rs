@@ -31,6 +31,8 @@ impl Participant {
     }
 }
 
+use crate::trivia::{TriviaQuestion, TriviaTopic};
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum InputMode {
     Normal,
@@ -50,6 +52,9 @@ pub struct App {
     pub input_buffer: String,
     pub error_message: Option<String>,
     pub api_status: String,
+    pub trivia_topic: Option<TriviaTopic>,
+    pub current_question_index: usize,
+    pub show_answer: bool,
 }
 
 impl Default for App {
@@ -69,6 +74,9 @@ impl App {
             input_buffer: String::new(),
             error_message: None,
             api_status: String::from("Offline (Mock Mode)"),
+            trivia_topic: None,
+            current_question_index: 0,
+            show_answer: true,
         }
     }
 
@@ -135,17 +143,59 @@ impl App {
         }
     }
 
-    /// Advances the round, rotating the queue left by 1.
+    /// Advances the round, rotating the queue left by 1 and advancing the question.
     pub fn next_round(&mut self) {
-        if self.queue.is_empty() {
+        if self.queue.is_empty() && self.trivia_topic.is_none() {
             return;
         }
 
-        // Rotate queue left by 1.
-        // E.g. [A, B, C, D] -> [B, C, D, A]
-        self.queue.rotate_left(1);
+        if !self.queue.is_empty() {
+            // Rotate queue left by 1.
+            // E.g. [A, B, C, D] -> [B, C, D, A]
+            self.queue.rotate_left(1);
+        }
         self.round_number += 1;
         self.current_queue_index = 0;
+
+        // Advance current_question_index if trivia topic is loaded
+        if let Some(topic) = &self.trivia_topic
+            && !topic.questions.is_empty()
+        {
+            if self.round_number - 1 < topic.questions.len() {
+                self.current_question_index = self.round_number - 1;
+            } else {
+                self.current_question_index = (self.round_number - 1) % topic.questions.len();
+            }
+        }
+    }
+
+    /// Returns the currently active trivia question, if any
+    pub fn current_question(&self) -> Option<&TriviaQuestion> {
+        self.trivia_topic
+            .as_ref()
+            .and_then(|t| t.questions.get(self.current_question_index))
+    }
+
+    /// Manually moves to the next trivia question
+    pub fn next_question(&mut self) {
+        if let Some(topic) = &self.trivia_topic
+            && !topic.questions.is_empty()
+            && self.current_question_index + 1 < topic.questions.len()
+        {
+            self.current_question_index += 1;
+        }
+    }
+
+    /// Manually moves to the previous trivia question
+    pub fn prev_question(&mut self) {
+        if self.current_question_index > 0 {
+            self.current_question_index -= 1;
+        }
+    }
+
+    /// Toggles visibility of the trivia answer and fact
+    pub fn toggle_show_answer(&mut self) {
+        self.show_answer = !self.show_answer;
     }
 
     /// Awards a trivia point to the active participant
@@ -187,6 +237,7 @@ impl App {
             queue: self.queue.clone(),
             current_queue_index: self.current_queue_index,
             round_number: self.round_number,
+            current_question_index: self.current_question_index,
         };
         let serialized = serde_json::to_string_pretty(&dump).map_err(std::io::Error::other)?;
         std::fs::write(filepath, serialized)?;
@@ -202,6 +253,7 @@ impl App {
         self.queue = dump.queue;
         self.current_queue_index = dump.current_queue_index;
         self.round_number = dump.round_number;
+        self.current_question_index = dump.current_question_index;
         Ok(())
     }
 
@@ -211,6 +263,7 @@ impl App {
         self.queue.clear();
         self.current_queue_index = 0;
         self.round_number = 1;
+        self.current_question_index = 0;
         self.error_message = None;
 
         if std::path::Path::new(filepath).exists() {
@@ -227,6 +280,8 @@ pub struct AppStateDump {
     pub queue: Vec<usize>,
     pub current_queue_index: usize,
     pub round_number: usize,
+    #[serde(default)]
+    pub current_question_index: usize,
 }
 
 #[cfg(test)]
@@ -368,6 +423,63 @@ mod tests {
         assert_eq!(app.queue.len(), 0);
         assert_eq!(app.round_number, 1);
         assert_eq!(app.current_queue_index, 0);
+        assert_eq!(app.current_question_index, 0);
         assert!(!std::path::Path::new(temp_file).exists());
+    }
+
+    #[test]
+    fn test_trivia_round_sync_and_navigation() {
+        let mut app = App::new();
+        let topic = TriviaTopic::new(
+            "Test Trivia".to_string(),
+            vec![
+                TriviaQuestion {
+                    number: 1,
+                    question: "Q1".to_string(),
+                    answer: "A1".to_string(),
+                    fact: None,
+                },
+                TriviaQuestion {
+                    number: 2,
+                    question: "Q2".to_string(),
+                    answer: "A2".to_string(),
+                    fact: None,
+                },
+                TriviaQuestion {
+                    number: 3,
+                    question: "Q3".to_string(),
+                    answer: "A3".to_string(),
+                    fact: None,
+                },
+            ],
+        );
+        app.trivia_topic = Some(topic);
+
+        assert_eq!(app.current_question_index, 0);
+        assert_eq!(app.current_question().unwrap().question, "Q1");
+
+        // Next round automatically advances question
+        app.next_round();
+        assert_eq!(app.round_number, 2);
+        assert_eq!(app.current_question_index, 1);
+        assert_eq!(app.current_question().unwrap().question, "Q2");
+
+        // Manual question navigation
+        app.prev_question();
+        assert_eq!(app.current_question_index, 0);
+        app.prev_question(); // Should not underflow
+        assert_eq!(app.current_question_index, 0);
+
+        app.next_question();
+        assert_eq!(app.current_question_index, 1);
+        app.next_question();
+        assert_eq!(app.current_question_index, 2);
+        app.next_question(); // Should not exceed bounds
+        assert_eq!(app.current_question_index, 2);
+
+        // Toggle answer
+        assert!(app.show_answer);
+        app.toggle_show_answer();
+        assert!(!app.show_answer);
     }
 }
