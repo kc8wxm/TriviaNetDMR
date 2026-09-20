@@ -1,7 +1,57 @@
 {
-  "participants": [],
-  "queue": [],
-  "current_queue_index": 0,
-  "round_number": 1,
-  "current_question_index": 0
+  "participants": [
+    {
+      "id": 0,
+      "callsign": "KE8WNV",
+      "name": "Bradley A Freeland",
+      "location": "Ferndale, MI, United States",
+      "points_checkin": 1,
+      "points_trivia": 3,
+      "points_bonus": 0,
+      "qrz_fetched": true,
+      "notes": ""
+    },
+    {
+      "id": 1,
+      "callsign": "KF8HDI",
+      "name": "Ryan N Vollmer",
+      "location": "Dearborn Heights, MI, United States",
+      "points_checkin": 1,
+      "points_trivia": 3,
+      "points_bonus": 0,
+      "qrz_fetched": true,
+      "notes": ""
+    },
+    {
+      "id": 2,
+      "callsign": "W8TOY",
+      "name": "JOHN W LITTLE",
+      "location": "MADISON HEIGHTS, MI, United States",
+      "points_checkin": 1,
+      "points_trivia": 2,
+      "points_bonus": 1,
+      "qrz_fetched": true,
+      "notes": ""
+    },
+    {
+      "id": 3,
+      "callsign": "KC0MYP",
+      "name": "Dana F West",
+      "location": "Mason, MI, United States",
+      "points_checkin": 1,
+      "points_trivia": 3,
+      "points_bonus": 0,
+      "qrz_fetched": true,
+      "notes": ""
+    }
+  ],
+  "queue": [
+    3,
+    0,
+    1,
+    2
+  ],
+  "current_queue_index": 4,
+  "round_number": 8,
+  "current_question_index": 7
 }

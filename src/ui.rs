@@ -485,7 +485,23 @@ pub fn draw(f: &mut Frame, app: &App) {
         ]),
     ];
 
-    if !app.queue.is_empty() && app.current_queue_index >= app.queue.len() {
+    if let Some(msg) = &app.status_message {
+        summary_lines.push(Line::raw(""));
+        summary_lines.push(Line::from(Span::styled(
+            format!(" ✔ {}", msg),
+            Style::default()
+                .fg(Color::LightGreen)
+                .add_modifier(Modifier::BOLD),
+        )));
+    } else if let Some(err) = &app.error_message {
+        summary_lines.push(Line::raw(""));
+        summary_lines.push(Line::from(Span::styled(
+            format!(" ⚠️ {}", err),
+            Style::default()
+                .fg(Color::LightRed)
+                .add_modifier(Modifier::BOLD),
+        )));
+    } else if !app.queue.is_empty() && app.current_queue_index >= app.queue.len() {
         summary_lines.push(Line::raw(""));
         summary_lines.push(Line::from(Span::styled(
             " 🏆 ROUND COMPLETED! 🏆",
@@ -494,7 +510,7 @@ pub fn draw(f: &mut Frame, app: &App) {
                 .add_modifier(Modifier::BOLD),
         )));
         summary_lines.push(Line::from(Span::styled(
-            " Press [r] to begin the next round (order rotates!).",
+            " Press [r] for next round or [f] to view final scores.",
             Style::default().fg(Color::LightYellow),
         )));
     } else if app.queue.is_empty() {
@@ -518,35 +534,35 @@ pub fn draw(f: &mut Frame, app: &App) {
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::raw(" Check-in "),
+        Span::raw(" Add "),
         Span::styled(
-            " [n/Enter]",
+            " [e]",
             Style::default()
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::raw(" Next "),
+        Span::raw(" Edit "),
         Span::styled(
-            " [p]",
+            " [d]",
             Style::default()
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::raw(" Prev "),
+        Span::raw(" Del "),
         Span::styled(
-            " [y]",
+            " [n/p/↕]",
             Style::default()
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::raw(" Correct "),
+        Span::raw(" Turn "),
         Span::styled(
-            " [b]",
+            " [y/b]",
             Style::default()
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::raw(" Bonus "),
+        Span::raw(" Point "),
         Span::styled(
             " [r]",
             Style::default()
@@ -554,6 +570,20 @@ pub fn draw(f: &mut Frame, app: &App) {
                 .add_modifier(Modifier::BOLD),
         ),
         Span::raw(" Rotate "),
+        Span::styled(
+            " [f]",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" Scores "),
+        Span::styled(
+            " [s]",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" Export "),
     ];
 
     if app.trivia_topic.is_some() {
@@ -564,7 +594,7 @@ pub fn draw(f: &mut Frame, app: &App) {
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::raw(" Ans Toggle "),
+            Span::raw(" Ans "),
             Span::styled(
                 " [ [ / ] ]",
                 Style::default()
@@ -682,5 +712,389 @@ pub fn draw(f: &mut Frame, app: &App) {
 
         let confirm_p = Paragraph::new(confirm_text).block(confirm_block);
         f.render_widget(confirm_p, popup_area);
+    }
+
+    // ==========================================
+    // 6. POPUP EDIT CALLSIGN MODAL
+    // ==========================================
+    if let InputMode::EditCallsign = app.input_mode {
+        let popup_area = centered_rect(50, 20, size);
+        f.render_widget(Clear, popup_area);
+
+        let active_call = app
+            .active_participant()
+            .map(|p| p.callsign.as_str())
+            .unwrap_or("");
+
+        let edit_block = Block::default()
+            .title(format!(" ✏️ Edit Operator Callsign ({}) ", active_call))
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::LightYellow));
+
+        let edit_text = vec![
+            Line::raw(" Modify operator callsign:"),
+            Line::raw(""),
+            Line::from(vec![
+                Span::raw(" > "),
+                Span::styled(
+                    &app.input_buffer,
+                    Style::default()
+                        .fg(Color::LightYellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    "_",
+                    Style::default()
+                        .fg(Color::LightYellow)
+                        .add_modifier(Modifier::SLOW_BLINK),
+                ),
+            ]),
+            Line::raw(""),
+            Line::from(Span::styled(
+                " Press [Enter] to save & update QRZ, [Esc] to cancel.",
+                Style::default().fg(Color::DarkGray),
+            )),
+        ];
+
+        let edit_p = Paragraph::new(edit_text).block(edit_block);
+        f.render_widget(edit_p, popup_area);
+    }
+
+    // ==========================================
+    // 7. POPUP DELETE OPERATOR MODAL
+    // ==========================================
+    if let InputMode::DeleteConfirm = app.input_mode {
+        let popup_area = centered_rect(52, 22, size);
+        f.render_widget(Clear, popup_area);
+
+        let target_call = app
+            .active_participant()
+            .map(|p| p.callsign.as_str())
+            .unwrap_or("operator");
+
+        let delete_block = Block::default()
+            .title(" 🗑️ Delete Operator ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::LightRed));
+
+        let delete_text = vec![
+            Line::from(vec![
+                Span::raw(" Are you sure you want to remove "),
+                Span::styled(
+                    target_call,
+                    Style::default()
+                        .fg(Color::LightYellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(" from the net?"),
+            ]),
+            Line::raw(" This will remove them from the active queue and scoreboard."),
+            Line::raw(""),
+            Line::from(vec![
+                Span::styled(" Press ", Style::default().fg(Color::Gray)),
+                Span::styled(
+                    "[y]",
+                    Style::default()
+                        .fg(Color::LightRed)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(" to confirm deletion, or ", Style::default().fg(Color::Gray)),
+                Span::styled(
+                    "[n or Esc]",
+                    Style::default()
+                        .fg(Color::LightGreen)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(" to cancel.", Style::default().fg(Color::Gray)),
+            ]),
+        ];
+
+        let delete_p = Paragraph::new(delete_text).block(delete_block);
+        f.render_widget(delete_p, popup_area);
+    }
+
+    // ==========================================
+    // 8. POPUP EXPORT CONTEST MODAL
+    // ==========================================
+    if let InputMode::ExportDialog { format } = app.input_mode {
+        let popup_area = centered_rect(56, 24, size);
+        f.render_widget(Clear, popup_area);
+
+        let export_block = Block::default()
+            .title(" 💾 Export Contest Results ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::LightGreen));
+
+        let (csv_span, json_span) = match format {
+            crate::state::ExportFormat::Csv => (
+                Span::styled(
+                    "[● CSV Format]",
+                    Style::default()
+                        .fg(Color::LightGreen)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled("  ○ JSON Format", Style::default().fg(Color::DarkGray)),
+            ),
+            crate::state::ExportFormat::Json => (
+                Span::styled("  ○ CSV Format", Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    "[● JSON Format]",
+                    Style::default()
+                        .fg(Color::LightGreen)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ),
+        };
+
+        let export_text = vec![
+            Line::from(vec![
+                Span::raw(" Format: "),
+                csv_span,
+                Span::raw("    "),
+                json_span,
+                Span::styled("   (Press [Tab] to switch)", Style::default().fg(Color::Gray)),
+            ]),
+            Line::raw(""),
+            Line::raw(" Destination Filename:"),
+            Line::from(vec![
+                Span::raw(" > "),
+                Span::styled(
+                    &app.input_buffer,
+                    Style::default()
+                        .fg(Color::LightGreen)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    "_",
+                    Style::default()
+                        .fg(Color::LightGreen)
+                        .add_modifier(Modifier::SLOW_BLINK),
+                ),
+            ]),
+            Line::raw(""),
+            Line::from(Span::styled(
+                " Press [Enter] to export, [Tab] to toggle format, [Esc] to cancel.",
+                Style::default().fg(Color::DarkGray),
+            )),
+        ];
+
+        let export_p = Paragraph::new(export_text).block(export_block);
+        f.render_widget(export_p, popup_area);
+    }
+
+    // ==========================================
+    // 9. POPUP FINAL SCORES / LEADERBOARD MODAL
+    // ==========================================
+    if let InputMode::FinalScores = app.input_mode {
+        let popup_area = centered_rect(80, 75, size);
+        f.render_widget(Clear, popup_area);
+
+        let main_block = Block::default()
+            .title(" 🏆 Contest Final Scores & Leaderboard 🏆 ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Yellow));
+
+        let inner_area = main_block.inner(popup_area);
+        f.render_widget(main_block, popup_area);
+
+        let popup_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(2), // Contest info banner
+                Constraint::Min(4),    // Table or empty text
+                Constraint::Length(1), // Footer shortcuts
+            ])
+            .split(inner_area);
+
+        // Header info banner
+        let topic_name = app
+            .trivia_topic
+            .as_ref()
+            .map(|t| t.title.as_str())
+            .unwrap_or("Amateur Radio Trivia Net");
+
+        let header_line = Line::from(vec![
+            Span::styled(" Topic: ", Style::default().fg(Color::Gray)),
+            Span::styled(
+                topic_name,
+                Style::default()
+                    .fg(Color::LightCyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("   Round: ", Style::default().fg(Color::Gray)),
+            Span::styled(
+                format!("{}", app.round_number),
+                Style::default()
+                    .fg(Color::LightYellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("   Check-ins: ", Style::default().fg(Color::Gray)),
+            Span::styled(
+                format!("{}", app.participants.len()),
+                Style::default()
+                    .fg(Color::LightGreen)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]);
+        f.render_widget(Paragraph::new(vec![header_line, Line::raw("")]), popup_chunks[0]);
+
+        // Scoreboard table
+        let scoreboard = app.get_scoreboard();
+        if scoreboard.is_empty() {
+            let empty_p = Paragraph::new(vec![
+                Line::raw(""),
+                Line::from(Span::styled(
+                    "  No participants checked in yet. Press [c] to check-in operators.",
+                    Style::default().fg(Color::LightYellow),
+                )),
+            ]);
+            f.render_widget(empty_p, popup_chunks[1]);
+        } else {
+            let visible_capacity = popup_chunks[1].height.saturating_sub(2) as usize; // header + spacing
+            let scroll = app.scoreboard_scroll.min(scoreboard.len().saturating_sub(1));
+            let visible_slice = &scoreboard[scroll..std::cmp::min(scroll + visible_capacity, scoreboard.len())];
+
+            let header_cells = [
+                "Rank", "Callsign", "Operator Name", "Location", "Check-in", "Trivia", "Bonus", "Score",
+            ]
+            .iter()
+            .map(|h| {
+                Span::styled(
+                    *h,
+                    Style::default()
+                        .fg(Color::LightBlue)
+                        .add_modifier(Modifier::BOLD),
+                )
+            });
+            let header_row = Row::new(header_cells).height(1).bottom_margin(1);
+
+            let mut rows = Vec::new();
+            for &(rank, ref p) in visible_slice {
+                let (rank_str, rank_style) = match rank {
+                    1 => (
+                        " 🥇 1 ".to_string(),
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    2 => (
+                        " 🥈 2 ".to_string(),
+                        Style::default()
+                            .fg(Color::LightCyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    3 => (
+                        " 🥉 3 ".to_string(),
+                        Style::default()
+                            .fg(Color::LightYellow)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    _ => (
+                        format!("  {:^3} ", rank),
+                        Style::default().fg(Color::Gray),
+                    ),
+                };
+
+                let score_style = Style::default()
+                    .fg(Color::LightGreen)
+                    .add_modifier(Modifier::BOLD);
+
+                let row_cells = vec![
+                    Span::styled(rank_str, rank_style),
+                    Span::styled(
+                        format!("{:<9}", p.callsign),
+                        Style::default()
+                            .fg(Color::White)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        format!("{:<20}", p.name.as_deref().unwrap_or("Unknown Operator")),
+                        Style::default().fg(Color::White),
+                    ),
+                    Span::styled(
+                        format!("{:<20}", p.location.as_deref().unwrap_or("-")),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                    Span::styled(
+                        format!(" {:^8} ", p.points_checkin),
+                        Style::default().fg(Color::White),
+                    ),
+                    Span::styled(
+                        format!(" {:^6} ", p.points_trivia),
+                        Style::default().fg(Color::White),
+                    ),
+                    Span::styled(
+                        format!(" {:^5} ", p.points_bonus),
+                        Style::default().fg(Color::White),
+                    ),
+                    Span::styled(
+                        format!(" {:^6} ", p.total_score()),
+                        score_style,
+                    ),
+                ];
+
+                let mut row = Row::new(row_cells).height(1);
+                if rank == 1 {
+                    row = row.style(Style::default().bg(Color::Rgb(35, 35, 15)));
+                }
+                rows.push(row);
+            }
+
+            let score_table = Table::new(
+                rows,
+                [
+                    Constraint::Length(7),  // Rank
+                    Constraint::Length(10), // Callsign
+                    Constraint::Min(20),    // Name
+                    Constraint::Min(20),    // Location
+                    Constraint::Length(10), // Check-in Pt
+                    Constraint::Length(8),  // Trivia Pt
+                    Constraint::Length(8),  // Bonus Pt
+                    Constraint::Length(8),  // Total Score
+                ],
+            )
+            .header(header_row);
+
+            f.render_widget(score_table, popup_chunks[1]);
+        }
+
+        // Footer hint
+        let mut hint_spans = vec![
+            Span::styled(
+                " [Esc/Enter/f]",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" Close  "),
+            Span::styled(
+                " [↑/↓/PgUp/PgDn]",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" Scroll  "),
+            Span::styled(
+                " [s]",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" Export  "),
+        ];
+        if !scoreboard.is_empty() {
+            let visible_capacity = popup_chunks[1].height.saturating_sub(2) as usize;
+            if scoreboard.len() > visible_capacity {
+                let scroll = app.scoreboard_scroll.min(scoreboard.len().saturating_sub(1));
+                let end = (scroll + visible_capacity).min(scoreboard.len());
+                hint_spans.push(Span::styled(
+                    format!("(Showing {}-{} of {})", scroll + 1, end, scoreboard.len()),
+                    Style::default().fg(Color::LightCyan),
+                ));
+            }
+        }
+
+        let hint_p = Paragraph::new(Line::from(hint_spans));
+        f.render_widget(hint_p, popup_chunks[2]);
     }
 }

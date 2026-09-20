@@ -1,0 +1,95 @@
+name: Build & Package Releases
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: TriviaNetDMR
+            asset_name: TriviaNetDMR-linux-x86_64
+            archive_type: tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: TriviaNetDMR.exe
+            asset_name: TriviaNetDMR-windows-x86_64
+            archive_type: zip
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: TriviaNetDMR
+            asset_name: TriviaNetDMR-macos-aarch64
+            archive_type: tar.gz
+          - os: macos-13
+            target: x86_64-apple-darwin
+            artifact_name: TriviaNetDMR
+            asset_name: TriviaNetDMR-macos-x86_64
+            archive_type: tar.gz
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build Release Binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package Release Assets (Unix)
+        if: matrix.archive_type == 'tar.gz'
+        run: |
+          mkdir -p package/Topic
+          cp target/${{ matrix.target }}/release/${{ matrix.artifact_name }} package/
+          cp -r Topic/*.md package/Topic/
+          cp GEMINI.md package/README.md
+          cd package
+          tar -czvf ../${{ matrix.asset_name }}.tar.gz *
+          cd ..
+
+      - name: Package Release Assets (Windows)
+        if: matrix.archive_type == 'zip'
+        shell: bash
+        run: |
+          mkdir -p package/Topic
+          cp target/${{ matrix.target }}/release/${{ matrix.artifact_name }} package/
+          cp -r Topic/*.md package/Topic/
+          cp GEMINI.md package/README.md
+          cd package
+          7z a -tzip ../${{ matrix.asset_name }}.zip *
+          cd ..
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: |
+            ${{ matrix.asset_name }}.tar.gz
+            ${{ matrix.asset_name }}.zip
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ matrix.asset_name }}.tar.gz
+            ${{ matrix.asset_name }}.zip

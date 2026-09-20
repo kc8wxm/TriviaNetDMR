@@ -10,16 +10,19 @@ TriviaNetDMR is a modern, highly interactive, and visually polished Terminal Use
 - **Trivia Question & Answer Prompter:** Automatically parses and displays trivia decks from Markdown files (such as `Topic/Questions-1.md`). Shows current question prompt, canonical answer, and Net Control facts with answer reveal toggling (`a`) and question navigation (`[` / `]`), synced to rounds.
 - **Trivia Queue Rotation:** Automatically rotates the active list of participants after each round, ensuring a fair starting position for all check-ins, while placing late check-ins at the end of the rotation.
 - **Granular Scoring:** Tracks automatic check-in points (1pt), trivia answer points (1pt per correct answer), and custom bonus points (1pt for best/interesting answers) per participant.
+- **Callsign Management:** Easily edit mistyped callsigns (`e`) with automatic QRZ re-lookup, or delete operators (`d`) from the active queue and roster with safe confirmation.
+- **Interactive Final Scoreboard & Leaderboard:** View full contest standings at any time (`f`) in an interactive leaderboard popup with podium ranks (🥇, 🥈, 🥉), full score breakdowns, and smooth scrolling for nets of any size.
+- **Contest Export (CSV & JSON):** Save contest results and final scoreboards at any time (`s`) to CSV spreadsheets or structured JSON data files, complete with ranks and participant statistics.
 
 ---
 
 ## 🛠 Project Architecture
 The codebase is structured into five highly focused modules:
-1. `src/state.rs`: Holds the pure domain models (`Participant`, `App`, `InputMode`), scoring mutations, queue rotation, and trivia question navigation. Contains unit tests for rotation offsets and late arrivals.
+1. `src/state.rs`: Holds the pure domain models (`Participant`, `App`, `InputMode`, `ExportFormat`), scoring mutations, queue rotation, participant edit/delete logic, export generators, and trivia question navigation. Contains unit tests for rotation offsets, scoring, editing, deletion, and exports.
 2. `src/trivia.rs`: Loads and parses Markdown question decks into structured topics, questions, answers, and Net Control facts, with robust Markdown syntax cleaning.
 3. `src/qrz.rs`: Features the asynchronous `QrzClient`. Manages session-cached authentication, XML response parsing using `roxmltree`, and the region-aware mock generator.
-4. `src/ui.rs`: Handles the layout rendering using `ratatui`. Draws the multi-column header (with round & question indicators), trivia question/answer banner, participant table, operator detail card, net summary stats, and check-in modal.
-5. `src/main.rs`: Coordinates startup, CLI argument handling (e.g. specifying question decks), crossterm raw-mode initialization, event routing, and graceful shutdown.
+4. `src/ui.rs`: Handles the layout rendering using `ratatui`. Draws the multi-column header (with round & question indicators), trivia question/answer banner, participant table, operator detail card, net summary stats (with status/error feedback), and modals for check-in, edit, delete, export, and clear.
+5. `src/main.rs`: Coordinates startup, CLI argument handling (e.g. specifying question decks), crossterm raw-mode initialization, event routing, background QRZ lookups, and graceful shutdown.
 
 ---
 
@@ -50,7 +53,7 @@ cargo run --release
 ```
 
 ### Run Unit Tests
-To execute the comprehensive test suite (testing scoring, queue rotation, and XML parsing):
+To execute the comprehensive test suite (testing scoring, queue rotation, XML parsing, callsign editing/deletion, and exports):
 ```bash
 cargo test
 ```
@@ -64,14 +67,19 @@ The application features intuitive single-key controls:
 | Key | Action | Description |
 | :--- | :--- | :--- |
 | `c` | **Check-in Operator** | Opens a modal popup to enter a callsign. Press `Enter` to submit, `Esc` to cancel. |
-| `n` or `Enter` | **Next Turn** | Advances the active turn to the next operator in the queue. |
-| `p` | **Prev Turn** | Moves the active turn back to the previous operator (for corrections). |
+| `e` | **Edit Callsign** | Opens a modal to edit the active operator's callsign and re-query QRZ. Press `Enter` to save, `Esc` to cancel. |
+| `d` | **Delete Operator** | Prompts confirmation to remove the active operator from the net and queue. Press `y` to confirm, `n`/`Esc` to cancel. |
+| `s` | **Export Contest** | Opens export modal to save contest results to CSV or JSON. Press `Tab` to switch format, `Enter` to export, `Esc` to cancel. |
+| `n`, `Enter`, or `↓` | **Next Turn** | Advances the active turn to the next operator in the queue. |
+| `p` or `↑` | **Prev Turn** | Moves the active turn back to the previous operator (for corrections). |
 | `y` | **Award Correct Answer** | Adds `1 pt` to the active operator's trivia score. |
 | `x` | **Deduct Correct Answer** | Deduct `1 pt` from the active operator's trivia score (for corrections). |
 | `b` | **Award Bonus Point**| Adds `1 pt` to the active operator's bonus score. |
 | `v` | **Deduct Bonus Point** | Deduct `1 pt` from the active operator's bonus score (for corrections). |
 | `r` | **Rotate Round** | Finishes the current round, increments round number, rotates queue, and advances question. |
+| `f` | **Show Final Scores** | Opens interactive final scoreboard and contest standings modal. Press `Esc`/`Enter` to close, `s` to export. |
 | `a` | **Toggle Answer Visibility** | Toggles hiding/revealing the answer and Net Control fact. |
-| `[` | **Previous Question** | Manually moves back to the previous trivia question. |
-| `]` | **Next Question** | Manually advances to the next trivia question. |
+| `[` or `←` | **Previous Question** | Manually moves back to the previous trivia question. |
+| `]` or `→` | **Next Question** | Manually advances to the next trivia question. |
+| `Backspace` or `k` | **Clear Session Log** | Prompts confirmation to clear session and reset all scores. |
 | `q` or `Esc` | **Quit** | Restores the terminal to its original state and exits the application. |
