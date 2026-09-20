@@ -197,7 +197,7 @@ mod tests {
         let path = "Topic/Questions-1.md";
         let topic = TriviaTopic::load_from_file(path).expect("Should load Questions-1.md");
         assert_eq!(topic.title, "Talk Like a Pirate Day");
-        assert_eq!(topic.questions.len(), 10);
+        assert_eq!(topic.questions.len(), 20);
 
         let q1 = &topic.questions[0];
         assert_eq!(q1.number, 1);
@@ -214,6 +214,26 @@ mod tests {
         let q10 = &topic.questions[9];
         assert_eq!(q10.number, 10);
         assert_eq!(q10.answer, "Port Royal.");
+
+        let q11 = &topic.questions[10];
+        assert_eq!(q11.number, 11);
+        assert!(q11.question.contains("grog"));
+        assert!(q11.answer.contains("Rum diluted with water"));
+
+        let q20 = &topic.questions[19];
+        assert_eq!(q20.number, 20);
+        assert_eq!(q20.answer, "\"Land ho!\"");
+    }
+
+    #[test]
+    fn test_parse_questions_merged() {
+        let path = "Topic/Questions.md";
+        let topic = TriviaTopic::load_from_file(path).expect("Should load Questions.md");
+        assert_eq!(topic.title, "Talk Like a Pirate Day");
+        assert_eq!(topic.questions.len(), 20);
+
+        assert_eq!(topic.questions[0].number, 1);
+        assert_eq!(topic.questions[19].number, 20);
     }
 
     #[test]

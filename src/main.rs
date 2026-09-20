@@ -47,12 +47,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // Load trivia questions (CLI arg -> Topic/Questions-1.md -> Questions-1.md)
+    // Load trivia questions (CLI arg -> Topic/Questions.md -> Topic/Questions-1.md -> Questions.md -> Questions-1.md)
     let args: Vec<String> = std::env::args().collect();
     let topic_path = if args.len() > 1 {
         Some(args[1].clone())
+    } else if std::path::Path::new("Topic/Questions.md").exists() {
+        Some("Topic/Questions.md".to_string())
     } else if std::path::Path::new("Topic/Questions-1.md").exists() {
         Some("Topic/Questions-1.md".to_string())
+    } else if std::path::Path::new("Questions.md").exists() {
+        Some("Questions.md".to_string())
     } else if std::path::Path::new("Questions-1.md").exists() {
         Some("Questions-1.md".to_string())
     } else {
