@@ -45,8 +45,8 @@ echo "📚 Validating question decks..."
 cargo run --quiet -- --check Topic/
 
 # 4. Git-Flow Release Branch
-echo "🌿 Starting Git-Flow release branch: ${TAG}..."
-git flow release start "${TAG}"
+echo "🌿 Starting Git-Flow release branch: ${VERSION}..."
+git flow release start "${VERSION}"
 
 # 5. Version Bumping
 echo "📝 Bumping package version in Cargo.toml to ${VERSION}..."
@@ -60,7 +60,7 @@ git commit -am "Prepare release ${TAG}"
 
 # 6. Finish Git-Flow Release
 echo "🏁 Finishing Git-Flow release..."
-GIT_MERGE_AUTOEDIT=no git flow release finish -m "Release ${TAG}" "${TAG}"
+GIT_MERGE_AUTOEDIT=no git flow release finish -m "Release ${TAG}" "${VERSION}"
 
 # 7. Build Local Release Binary
 echo "🔨 Compiling optimized release binary..."
