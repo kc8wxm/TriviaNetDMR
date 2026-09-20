@@ -41,6 +41,8 @@ The scoring model is designed to reward participation while honoring trivia know
      ./TriviaNetDMR
    #+END_SRC
 4. *Verify Topic & Screen:*
+   - Check the top header to confirm the active release version (e.g. =v0.1.2=) and QRZ connection mode.
+   - On first run or new session, verify the roster is clean at Round 1 (or press =Backspace= / =k= to reset session).
    - If you wish to change topics on the fly, press =t= to open the Deck Picker, select the desired theme, and press =Enter=.
    - If you need a refresher on keyboard shortcuts, press =?= to view the Help Menu.
 

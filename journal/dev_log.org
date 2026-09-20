@@ -80,6 +80,25 @@ contest management.
   - Expanded unit test suite from 20 to 26 passing tests.
   - Finished Git-Flow release *v0.1.2* and pushed master, develop, and tags to GitHub.
 
+** [2026-09-20] TUI Version Pill & Resilient Blank-Start Architecture
+- *Focus:* Visual feedback, compile-time metadata reflection, and fresh session zero-state.
+- *Features Implemented:*
+  - *Persistent Header Version Pill:* Displayed compile-time package version =v0.1.2=
+    via =env!("CARGO_PKG_VERSION")= in bold =LightGreen= within the primary TUI dashboard header
+    and the interactive Help Menu modal subtitle.
+  - *CLI & Exit Diagnostics Versioning:* Displayed version tag in CLI deck validator
+    (=🔍 TriviaNetDMR v0.1.2 Deck Validator=) and final scores printout on application exit.
+  - *Fresh First-Run Blank State:* Reset =trivia_log.json= to a pristine zero-state template:
+    =participants: []=, =queue: []=, =current_queue_index: 0=, =round_number: 1=, =current_question_index: 0=.
+  - *Resilient Session Deserialization:*
+    - Annotated =AppStateDump= with =#[serde(default)]= and =default_round_number() = 1=.
+    - Handled 0-byte empty files and minimal ={}= in =App::load_from_file= without parsing crashes.
+- *Quality Assurance:*
+  - Added unit test =test_load_from_empty_and_default_json= verifying empty and minimal JSON loading.
+  - Expanded unit test suite from 26 to 27 passing tests.
+  - Finished Git-Flow feature branches =feature/show-app-version= and =feature/empty-default-json=,
+    merged into =develop=, and pushed to GitHub.
+
 * Solved Engineering Hurdles & Bug Logs
 
 ** Issue 1: Terminal Raw Mode Residuals on Abnormal Exit
@@ -99,3 +118,10 @@ contest management.
   a single =Row= produced compiler error =E0277= regarding =From<Line> for Span=.
 - *Solution:* Standardized all table cells to uniform =Span= instances, using pre-formatted
   composite strings for the status and active badge columns.
+
+** Issue 4: First-Run Cloned Repository Session Pollution
+- *Problem:* Running the application directly after a clean clone loaded previous developer test
+  participants and round 8 because =trivia_log.json= had been committed with stale state.
+- *Solution:* Reset =trivia_log.json= to an empty initial state template, added Serde defaults to
+  =AppStateDump= with =default_round_number() = 1=, and made =load_from_file= treat empty 0-byte files
+  as clean starts.

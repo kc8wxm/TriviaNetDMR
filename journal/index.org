@@ -71,7 +71,7 @@ The entire application is controlled via intuitive single-key shortcuts:
   # Compile and launch the release dashboard
   cargo run --release
 
-  # Run the full automated test suite (26 unit tests)
+  # Run the full automated test suite (27 unit tests)
   cargo test
 
   # Pre-flight validate all question decks before a net
@@ -83,6 +83,7 @@ The entire application is controlled via intuitive single-key shortcuts:
 
 ** Environment & Toolchain
 
+- *Current Release:* v0.1.2
 - *Language:* Rust (2024 Edition)
 - *TUI Framework:* [[https://github.com/ratatui-org/ratatui][Ratatui v0.30.2]] on [[https://github.com/crossterm-rs/crossterm][Crossterm v0.29.0]]
 - *Async Runtime:* [[https://tokio.rs][Tokio v1.53.1]] (full multi-threaded runtime)

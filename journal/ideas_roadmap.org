@@ -79,3 +79,4 @@ RFCs (Requests for Comments), and exploratory engineering spikes.
 - [ ] /Idea:/ Export to ADIF (Amateur Data Interchange Format) for operators who log net check-ins into Logbook of the World (LoTW) or QRZ Logbook.
 - [ ] /Idea:/ Color themes for the dashboard (e.g. Amber phosphor retro, Matrix green, High-contrast monochrome for outdoor sunlight field operations).
 - [ ] /Idea:/ Support multiple simultaneous Net Control stations operating as primary NCS and logger over local LAN.
+- [ ] /Idea:/ Auto-backup session snapshots (=trivia_log.backup-[timestamp].json=) on session reset or round completion.

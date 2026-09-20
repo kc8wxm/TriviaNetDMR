@@ -70,7 +70,7 @@ validator mode. It runs instantly without opening the full TUI:
 
 ** Diagnostic Output Example
 #+BEGIN_SRC text
-  🔍 TriviaNetDMR Deck Validator
+  🔍 TriviaNetDMR v0.1.2 Deck Validator
 
   Scanning: Topic/
   --------------------------------------------------

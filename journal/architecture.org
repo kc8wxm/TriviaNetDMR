@@ -125,7 +125,7 @@ The =DeckValidation= diagnostic engine analyzes question files against several q
 Renders a modern, high-information-density dashboard using Ratatui.
 
 *** Grid Hierarchy
-- *Top Header (Height 3):* Application badge, Active Round indicator, and QRZ Live/Mock status.
+- *Top Header (Height 3):* Application badge with compile-time version pill (=env!("CARGO_PKG_VERSION")=), Active Round & Question indicator, and QRZ Live/Mock status.
 - *Trivia Card (Height 7):* Active question prompt, canonical answer (with toggle =a=), and Net Control fact.
 - *Body (Dynamic split):*
   - *Left (60% width):* Participant table showing active turn cursor (=▶=), callsign, name, and live point tallies.
@@ -138,15 +138,16 @@ Coordinates the execution lifecycle:
 1. Intercepts CLI flags (e.g. =--check= / =-c= validator mode) before terminal raw mode.
 2. Initializes Crossterm raw mode and alternate screen buffer.
 3. Spawns Tokio channel receivers for keystroke events and background QRZ results.
-4. Auto-saves state to =trivia_log.json= on every state mutation.
-5. Handles graceful shutdown: restores raw terminal mode and prints the final contest standings table to stdout.
+4. Auto-saves state to =trivia_log.json= on every state mutation and on graceful shutdown.
+5. Loads previous session state from =trivia_log.json= with fault-tolerant Serde defaults.
+6. Handles graceful shutdown: restores raw terminal mode and prints the final contest standings table to stdout.
 
 * Architectural Decision Records (ADRs)
 
 ** ADR-001: Decoupling Pure State from Ratatui Rendering
 - *Context:* TUI applications often intertwine terminal widget logic with data mutations, making automated unit testing difficult.
 - *Decision:* Maintain =src/state.rs= as a pure Rust domain model without any imports of =ratatui= or =crossterm=.
-- *Consequences:* Allowed writing 26 comprehensive unit tests covering queue rotation, score calculations, callsign editing/deletions, and JSON/CSV exports that execute in under 20 milliseconds without needing a terminal.
+- *Consequences:* Allowed writing 27 comprehensive unit tests covering queue rotation, score calculations, callsign editing/deletions, empty/default JSON resilience, and JSON/CSV exports that execute in under 20 milliseconds without needing a terminal.
 
 ** ADR-002: Asynchronous Channels for Callbook Lookups
 - *Context:* QRZ lookups take between 150ms to 2000ms depending on internet latency.
@@ -162,3 +163,11 @@ Coordinates the execution lifecycle:
 - *Context:* Rapid feature development required a disciplined workflow to prevent unfinished features from breaking master production builds.
 - *Decision:* Adopt Git-Flow with =master= (production releases), =develop= (active integration), =feature/*= branches, and =release/*= branches with automated GitHub Actions CI/CD.
 - *Consequences:* Clean, auditable release history with automatic multi-platform binary compilation on every tag.
+
+** ADR-005: Resilient Session State Persistence & Clean-Slate Defaults
+- *Context:* Automatic session loading must not fail when files are blank, empty, or when new schema fields are introduced across releases. Furthermore, newly cloned repositories must start cleanly without loading historical test sessions.
+- *Decision:* 
+  1. Model =AppStateDump= with explicit Serde default fallback values (=#[serde(default)]= and =default_round_number() = 1=).
+  2. Implement an early return for 0-byte or whitespace-only files in =App::load_from_file=.
+  3. Commit a clean, empty template =trivia_log.json= representing a fresh Round 1 session with 0 participants.
+- *Consequences:* Flawless first-run experience out of the box, safe backward compatibility across releases, and zero crashes on missing JSON keys.
