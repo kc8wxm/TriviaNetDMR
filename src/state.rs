@@ -271,6 +271,10 @@ impl App {
     /// Loads the state from a JSON file, restoring participants, queue, active turn, and round.
     pub fn load_from_file(&mut self, filepath: &str) -> Result<(), std::io::Error> {
         let content = std::fs::read_to_string(filepath)?;
+        if content.trim().is_empty() {
+            // An empty file represents a fresh blank start
+            return Ok(());
+        }
         let dump: AppStateDump = serde_json::from_str(&content).map_err(std::io::Error::other)?;
 
         self.participants = dump.participants;
@@ -588,15 +592,35 @@ pub struct ContestParticipantExport {
     pub total_score: u32,
 }
 
+fn default_round_number() -> usize {
+    1
+}
+
 /// Helper struct for serializing and deserializing the state of the application.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AppStateDump {
+    #[serde(default)]
     pub participants: Vec<Participant>,
+    #[serde(default)]
     pub queue: Vec<usize>,
+    #[serde(default)]
     pub current_queue_index: usize,
+    #[serde(default = "default_round_number")]
     pub round_number: usize,
     #[serde(default)]
     pub current_question_index: usize,
+}
+
+impl Default for AppStateDump {
+    fn default() -> Self {
+        Self {
+            participants: Vec::new(),
+            queue: Vec::new(),
+            current_queue_index: 0,
+            round_number: 1,
+            current_question_index: 0,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -740,6 +764,30 @@ mod tests {
         assert_eq!(app.current_queue_index, 0);
         assert_eq!(app.current_question_index, 0);
         assert!(!std::path::Path::new(temp_file).exists());
+    }
+
+    #[test]
+    fn test_load_from_empty_and_default_json() {
+        let temp_empty_file = "test_empty_file.json";
+        let temp_default_json = "test_default_json.json";
+
+        // Test 1: Completely empty file (0 bytes)
+        std::fs::write(temp_empty_file, "").unwrap();
+        let mut app1 = App::new();
+        app1.round_number = 5;
+        assert!(app1.load_from_file(temp_empty_file).is_ok());
+        let _ = std::fs::remove_file(temp_empty_file);
+
+        // Test 2: Minimal JSON object `{}`
+        std::fs::write(temp_default_json, "{}").unwrap();
+        let mut app2 = App::new();
+        assert!(app2.load_from_file(temp_default_json).is_ok());
+        assert_eq!(app2.participants.len(), 0);
+        assert_eq!(app2.queue.len(), 0);
+        assert_eq!(app2.round_number, 1);
+        assert_eq!(app2.current_queue_index, 0);
+        assert_eq!(app2.current_question_index, 0);
+        let _ = std::fs::remove_file(temp_default_json);
     }
 
     #[test]
