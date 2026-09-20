@@ -87,4 +87,5 @@ The application features intuitive single-key controls:
 | `[` or `←` | **Previous Question** | Manually moves back to the previous trivia question. |
 | `]` or `→` | **Next Question** | Manually advances to the next trivia question. |
 | `Backspace` or `k` | **Clear Session Log** | Prompts confirmation to clear session and reset all scores. |
+| `?` or `h` | **Help Menu** | Opens popup reference modal displaying all keyboard shortcuts and commands. |
 | `q` or `Esc` | **Quit** | Restores the terminal to its original state and exits the application. |

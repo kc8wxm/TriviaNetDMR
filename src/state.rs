@@ -49,6 +49,7 @@ pub enum InputMode {
     ExportDialog { format: ExportFormat },
     FinalScores,
     TopicPicker,
+    HelpMenu,
 }
 
 #[derive(Clone, Debug)]
@@ -62,6 +63,7 @@ pub struct App {
     pub input_mode: InputMode,
     pub input_buffer: String,
     pub scoreboard_scroll: usize,
+    pub help_scroll: usize,
     pub error_message: Option<String>,
     pub status_message: Option<String>,
     pub api_status: String,
@@ -89,6 +91,7 @@ impl App {
             input_mode: InputMode::Normal,
             input_buffer: String::new(),
             scoreboard_scroll: 0,
+            help_scroll: 0,
             error_message: None,
             status_message: None,
             api_status: String::from("Offline (Mock Mode)"),
@@ -1016,5 +1019,16 @@ mod tests {
         assert_eq!(app.trivia_topic.as_ref().unwrap().questions.len(), 10);
         assert_eq!(app.current_question_index, 2);
     }
+
+    #[test]
+    fn test_help_menu_state() {
+        let mut app = App::new();
+        assert_eq!(app.input_mode, InputMode::Normal);
+        app.input_mode = InputMode::HelpMenu;
+        app.help_scroll = 2;
+        assert_eq!(app.input_mode, InputMode::HelpMenu);
+        assert_eq!(app.help_scroll, 2);
+    }
 }
+
 

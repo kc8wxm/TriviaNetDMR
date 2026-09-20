@@ -288,6 +288,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 }
                             }
                         }
+                        KeyCode::Char('?')
+                        | KeyCode::Char('h')
+                        | KeyCode::Char('H')
+                        | KeyCode::F(1) => {
+                            app.help_scroll = 0;
+                            app.input_mode = InputMode::HelpMenu;
+                        }
                         KeyCode::Backspace | KeyCode::Char('k') => {
                             app.input_mode = InputMode::ClearConfirm;
                         }
@@ -534,6 +541,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         KeyCode::Esc | KeyCode::Char('q') => {
                             app.input_mode = InputMode::Normal;
+                        }
+                        _ => {}
+                    },
+
+                    // --- INPUT MODE: HELP MENU ---
+                    InputMode::HelpMenu => match key.code {
+                        KeyCode::Esc
+                        | KeyCode::Enter
+                        | KeyCode::Char('?')
+                        | KeyCode::Char('h')
+                        | KeyCode::Char('H')
+                        | KeyCode::Char('q') => {
+                            app.input_mode = InputMode::Normal;
+                        }
+                        KeyCode::Up | KeyCode::Char('k') => {
+                            if app.help_scroll > 0 {
+                                app.help_scroll -= 1;
+                            }
+                        }
+                        KeyCode::Down | KeyCode::Char('j') => {
+                            app.help_scroll += 1;
+                        }
+                        KeyCode::PageUp => {
+                            app.help_scroll = app.help_scroll.saturating_sub(5);
+                        }
+                        KeyCode::PageDown => {
+                            app.help_scroll += 5;
                         }
                         _ => {}
                     },
